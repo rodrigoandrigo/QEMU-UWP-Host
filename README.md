@@ -38,7 +38,11 @@ Supported target entries depend on the DLLs included in the package. Typical tar
 - `sparc`
 - `m68k`
 - `loongarch64`
-- `shadps4` — PS4 Liverpool/base and PS4 Pro Neo target. Select the title `eboot.bin` as the direct kernel, choose Base or Neo, and provide its Title ID (for example `CUSA02456`). The adjacent `sce_module` folder must remain beside the title file.
+- `shadps4` — not working.
+
+## Qemu shared library
+
+Modified QEMU 11.0.2 files to build as a shared library in https://github.com/rodrigoandrigo/Qemu-Dll-shadps4
 
 ## Boot Workflow
 
