@@ -1,0 +1,10 @@
+<Solution>
+  <Configurations>
+    <Platform Name="ARM64" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="Qemu-UWP-host.vcxproj" Id="d7490a39-19fe-4aa5-85ca-059349a364ec">
+    <Deploy />
+  </Project>
+</Solution>
