@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <mutex>
 #include <string>
@@ -12,6 +13,10 @@ namespace Qemu_UWP_host
 		unsigned width;
 		unsigned height;
 		unsigned frameNumber;
+		unsigned dirtyX;
+		unsigned dirtyY;
+		unsigned dirtyWidth;
+		unsigned dirtyHeight;
 		bool valid;
 		bool dirty;
 		std::vector<uint32_t> pixels;
@@ -33,6 +38,8 @@ namespace Qemu_UWP_host
 		void SetProgressCallback(std::function<void(const std::wstring&)> callback);
 		std::wstring StatusText() const;
 		bool HasVideoFrame() const;
+		unsigned VideoFrameCount() const;
+		uint64_t FirstVideoFrameTick() const;
 		QemuHostFrameSnapshot CopyFrame(bool forcePixels);
 		void SetKey(unsigned key, bool down);
 		void SetPointer(float x, float y, float width, float height, int deltaX, int deltaY, bool left, bool right, bool middle);
@@ -54,6 +61,8 @@ namespace Qemu_UWP_host
 		typedef void (*QemuHostAudioCallback)(const void* samples, size_t size, int sample_rate, int channels, int format, void* opaque);
 		typedef void (*QemuHostLogCallbackV2)(void* opaque, QemuHostLogLevel level, const char* message);
 		typedef void (*QemuHostVideoCallbackV2)(void* opaque, const void* pixels, int width, int height, int stride, int format);
+		typedef void (*QemuHostVideoUpdateCallbackV3)(void* opaque, const void* pixels, int width, int height, int stride, int format,
+			int x, int y, int updateWidth, int updateHeight);
 		typedef void (*QemuHostAudioCallbackV2)(void* opaque, const void* samples, size_t size, int sample_rate, int channels, int format);
 		typedef void (*QemuHostInputCallback)(int type, int code, int value, void* opaque);
 
@@ -62,9 +71,11 @@ namespace Qemu_UWP_host
 		typedef int (*qemu_host_run_t)();
 		typedef int (*qemu_host_start_t)();
 		typedef int (*qemu_host_main_loop_step_t)(bool nonblocking, int* status);
+		typedef void (*qemu_host_wake_main_loop_t)();
 		typedef int (*qemu_host_pause_t)();
 		typedef int (*qemu_host_resume_t)();
 		typedef int (*qemu_host_request_shutdown_t)();
+		typedef int (*qemu_host_request_stop_t)();
 		typedef int (*qemu_host_reset_t)();
 		typedef int (*qemu_host_join_t)(int* status);
 		typedef int (*qemu_host_cleanup_t)();
@@ -80,6 +91,7 @@ namespace Qemu_UWP_host
 		typedef void (*qemu_host_set_audio_callback_t)(QemuHostAudioCallback callback, void* opaque);
 		typedef void (*qemu_host_register_log_callback_t)(QemuHostLogCallbackV2 callback, void* opaque);
 		typedef void (*qemu_host_register_video_callback_t)(QemuHostVideoCallbackV2 callback, void* opaque);
+		typedef void (*qemu_host_register_video_update_callback_t)(QemuHostVideoUpdateCallbackV3 callback, void* opaque);
 		typedef void (*qemu_host_register_audio_callback_t)(QemuHostAudioCallbackV2 callback, void* opaque);
 		typedef void (*qemu_host_set_input_callback_t)(QemuHostInputCallback callback, void* opaque);
 		typedef bool (*qemu_host_is_initialized_t)();
@@ -94,6 +106,7 @@ namespace Qemu_UWP_host
 		void RunQemu();
 		void ProcessPendingControl();
 		void ProcessPendingInput();
+		void WakeMainLoop();
 		void Trace(const std::wstring& text);
 		void SetStatus(const std::wstring& text);
 		static std::string Narrow(const std::wstring& value);
@@ -108,6 +121,10 @@ namespace Qemu_UWP_host
 		static void AudioCallback(const void* samples, size_t size, int sample_rate, int channels, int format, void* opaque);
 		static void LogCallbackV2(void* opaque, QemuHostLogLevel level, const char* message);
 		static void VideoCallbackV2(void* opaque, const void* pixels, int width, int height, int stride, int format);
+		static void VideoUpdateCallbackV3(void* opaque, const void* pixels, int width, int height, int stride, int format,
+			int x, int y, int updateWidth, int updateHeight);
+		static void ProcessVideoUpdate(QemuDirectHost* host, const void* pixels, int width, int height, int stride, int format,
+			int x, int y, int updateWidth, int updateHeight);
 		static void AudioCallbackV2(void* opaque, const void* samples, size_t size, int sample_rate, int channels, int format);
 		static void InputCallback(int type, int code, int value, void* opaque);
 
@@ -135,9 +152,11 @@ namespace Qemu_UWP_host
 		qemu_host_run_t m_qemuHostRun;
 		qemu_host_start_t m_qemuHostStart;
 		qemu_host_main_loop_step_t m_qemuHostMainLoopStep;
+		qemu_host_wake_main_loop_t m_qemuHostWakeMainLoop;
 		qemu_host_pause_t m_qemuHostPause;
 		qemu_host_resume_t m_qemuHostResume;
 		qemu_host_request_shutdown_t m_qemuHostRequestShutdown;
+		qemu_host_request_stop_t m_qemuHostRequestStop;
 		qemu_host_reset_t m_qemuHostReset;
 		qemu_host_join_t m_qemuHostJoin;
 		qemu_host_cleanup_t m_qemuHostCleanup;
@@ -153,6 +172,7 @@ namespace Qemu_UWP_host
 		qemu_host_set_audio_callback_t m_qemuHostSetAudioCallback;
 		qemu_host_register_log_callback_t m_qemuHostRegisterLogCallback;
 		qemu_host_register_video_callback_t m_qemuHostRegisterVideoCallback;
+		qemu_host_register_video_update_callback_t m_qemuHostRegisterVideoUpdateCallback;
 		qemu_host_register_audio_callback_t m_qemuHostRegisterAudioCallback;
 		qemu_host_set_input_callback_t m_qemuHostSetInputCallback;
 		qemu_host_is_initialized_t m_qemuHostIsInitialized;
@@ -179,6 +199,11 @@ namespace Qemu_UWP_host
 		unsigned m_frameWidth;
 		unsigned m_frameHeight;
 		unsigned m_videoFrameCount;
+		unsigned m_dirtyX;
+		unsigned m_dirtyY;
+		unsigned m_dirtyWidth;
+		unsigned m_dirtyHeight;
+		uint64_t m_firstVideoFrameTick;
 		bool m_frameValid;
 		bool m_frameDirty;
 		bool m_mouseLeft;
@@ -188,11 +213,12 @@ namespace Qemu_UWP_host
 		int m_pointerHeight;
 		ULONGLONG m_loopStartTick;
 		bool m_initializedOnce;
-		bool m_initialized;
+		std::atomic<bool> m_initialized;
 		bool m_deferredInit;
-		bool m_running;
+		std::atomic<bool> m_running;
 		bool m_pendingPause;
 		bool m_pendingResume;
+		bool m_pendingReset;
 		bool m_pendingShutdown;
 		bool m_pendingStop;
 	};

@@ -31,6 +31,8 @@ namespace Qemu_UWP_host
 		std::wstring StatusText() const;
 		std::wstring ApiCompatibilityText() const;
 		bool HasVideoFrame() const;
+		unsigned VideoFrameCount() const;
+		uint64_t FirstVideoFrameTick() const;
 		void TrackingUpdate(float positionX, float positionY);
 		void StopTracking();
 		Concurrency::critical_section& GetCriticalSection() { return m_criticalSection; }

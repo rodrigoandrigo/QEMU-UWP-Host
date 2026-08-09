@@ -1,11 +1,13 @@
 # QEMU UWP Host
 
-QEMU UWP Host is a Universal Windows Platform host application for running embedded QEMU system emulators through packaged `qemu-system-*` DLLs. It provides a graphical frontend for selecting a QEMU target, choosing boot media, generating QEMU command lines, and displaying video output through the host display backend.
+QEMU UWP Host is a Universal Windows Platform host application focused on the packaged `qemu-system-x86_64` emulator. It provides a graphical frontend for choosing boot media, generating QEMU commands, and displaying video output through the host display backend.
 
 ## Features
 
-- Dynamic QEMU target selection from packaged `qemu-system-*` DLLs.
+- Fixed `qemu-system-x86_64` target for the Xbox-focused build.
 - Host display rendering inside the UWP application.
+- Dirty-rectangle framebuffer transfer and partial Direct3D texture uploads with full-frame fallback for older DLLs.
+- On-screen runtime metrics for first-frame boot time, process RAM, received-frame FPS, and normalized process CPU usage.
 - XAudio2 audio configuration for generated profiles.
 - Boot media selection for drive and CD-ROM images.
 - Boot media history from the app-managed media folder.
@@ -19,39 +21,15 @@ QEMU UWP Host is a Universal Windows Platform host application for running embed
 
 ## QEMU Targets
 
-The app detects packaged QEMU targets automatically by scanning for DLLs named `qemu-system-*.dll`. The target selector is populated from those DLLs at startup, with `x86_64` used as the default target when available.
-
-Supported target entries depend on the DLLs included in the package. Typical targets include:
-
-- `x86_64`
-- `i386`
-- `aarch64`
-- `arm`
-- `riscv64`
-- `riscv32`
-- `ppc64`
-- `ppc`
-- `mips64`
-- `mips`
-- `s390x`
-- `sparc64`
-- `sparc`
-- `m68k`
-- `loongarch64`
-- `shadps4` — not working.
-
-## Qemu shared library
-
-Modified QEMU 11.0.2 files to build as a shared library in https://github.com/rodrigoandrigo/Qemu-Dll-shadps4
+The only available target is `x86_64`, backed by `qemu-system-x86_64.dll`. Other packaged QEMU DLLs are not exposed as selectable targets.
 
 ## Boot Workflow
 
-1. Select the QEMU target.
-2. Choose a profile or keep the normal command profile.
-3. Select drive media, CD-ROM media, or direct boot files.
-4. Review the generated command in the `qemu commands` tab.
-5. Add any custom arguments in `Additional QEMU arguments`.
-6. Start the emulator from the command bar.
+1. Choose a profile or keep the normal command profile.
+2. Select drive media, CD-ROM media, or direct boot files.
+3. Review the generated command in the `qemu commands` tab.
+4. Add any custom arguments in `Additional QEMU arguments`.
+5. Start the emulator from the command bar.
 
 The generated command is target-aware. Machine defaults, boot device handling, disk interface choices, firmware selection, and input defaults are adapted to the selected target.
 
@@ -70,8 +48,12 @@ Profiles provide practical startup presets for common use cases:
 - Windows XP
 - Windows Vista
 - Windows 7
+- Xbox TCG 64 MB cache (2 vCPUs)
+- Xbox TCG 128 MB cache (2 vCPUs)
+- Xbox TCG 256 MB cache (4 vCPUs)
 
 Profiles can be used as a starting point and then adjusted through the selectors or through additional QEMU arguments.
+Every generated `x86_64` command uses `-accel tcg,thread=multi`. The balanced default translation cache is 128 MB, avoiding QEMU's much larger generic 64-bit default reservation on the memory-constrained Xbox/UWP host. The default is 2 vCPUs, with 4 and 6 vCPUs available in the selector. Xbox TCG profiles set the translation cache to 64, 128 or 256 MB and select their matching 2- or 4-vCPU configuration; 6 vCPUs can be selected manually. Guest memory, machine, CPU, video and device selections remain independently configurable.
 
 ## Media
 
@@ -90,6 +72,23 @@ Use `Ctrl + Alt + M` to release or recapture emulator input.
 ## Diagnostics
 
 The Errors tab collects runtime messages, generated command information, QEMU host API inspection results, and packaged DLL load diagnostics. These tools help verify that the packaged QEMU DLLs and dependencies are available to the app at runtime.
+
+## UWP JIT and `codeGeneration`
+
+The Xbox/UWP QEMU build uses `codeGeneration` with split W^X memory. The TCG translation cache is backed by one paging-file mapping exposed through two coherent views: RW for emitting translated code and RX for executing it. No mapped page is writable and executable at the same time. Publishing a translation also calls `FlushInstructionCache`, including on x86-64, as required by the packaged-app API contract.
+
+The Windows SDK UWP source path uses `CreateFileMappingFromApp`, `MapViewOfFileFromApp`, `VirtualProtectFromApp`, and `VirtualAllocFromApp`; Meson detects and links `OneCore.lib`. The legacy Durango XDK lacks the latter two `FromApp` declarations, so that toolchain automatically retains its permitted TV_APP `VirtualAlloc` and `VirtualProtect` calls while still using split RW/RX mappings. Both paths reject an attempted RWX protection. The package manifest must retain the `codeGeneration` capability.
+
+After compiling your QEMU DLL, validate its source contract and imports from a Developer PowerShell:
+
+```powershell
+& <qemu-source>\scripts\ci\check-uwp-jit.ps1 `
+    -BinaryPath <path-to-qemu-system-x86_64.dll>
+```
+
+Omit `-BinaryPath` to perform only the static source verification. The script does not compile QEMU.
+
+For a DLL compiled against the July 2018 Durango XDK headers, add `-DurangoXdk` so the import audit accepts the XDK's TV_APP memory APIs.
 
 ## Project Structure
 
@@ -112,7 +111,9 @@ The checked-in runtime is self-contained:
 
 No MSYS2 installation or sibling QEMU DLL directory is needed to package the application. Update these DLLs as one tested set; see `Dependencies\README.md` and `QEMU_HOST_API.md` for the host-API compatibility contract.
 
-Before starting a VM, the app runs a preflight check for the selected target DLL, direct boot files, and RFB settings. Results are recorded in the Errors tab.
+Before starting a VM, the app runs a preflight check for the selected target DLL and direct boot files. Results are recorded in the Errors tab. Xbox/UWP always uses the local in-process Direct3D display; VNC/RFB, DBus display, WHPX and automatically detected OpenGL/cURL support are excluded from this TCG-only build path.
+
+Host API 1.3 also lets the embedded QEMU main loop block on its native event wait and wake only for timers, devices, input or lifecycle requests. Older DLLs remain compatible through the previous nonblocking fallback.
 
 ### Requirements
 

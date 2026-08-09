@@ -6,18 +6,46 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    Background="Black">
+    Background="#FF061A14">
 
   <Page.Resources>
-    <SolidColorBrush x:Key="HeaderBackgroundBrush" Color="#F01F1F1F" />
-    <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#E6000000" />
-    <SolidColorBrush x:Key="CardBackgroundBrush" Color="#CC141414" />
-    <SolidColorBrush x:Key="MutedTextBrush" Color="#FF9CA3AF" />
-    <SolidColorBrush x:Key="SectionLineBrush" Color="#FF5F6368" />
-    <SolidColorBrush x:Key="AccentBrush" Color="#FF00C853" />
+    <SolidColorBrush x:Key="HeaderBackgroundBrush" Color="#FF09231B" />
+    <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#F5061A14" />
+    <SolidColorBrush x:Key="CardBackgroundBrush" Color="#F5102D24" />
+    <SolidColorBrush x:Key="GuideBackgroundBrush" Color="#FF173D2F" />
+    <SolidColorBrush x:Key="MutedTextBrush" Color="#FFC1D4CC" />
+    <SolidColorBrush x:Key="SectionLineBrush" Color="#FF356B57" />
+    <SolidColorBrush x:Key="AccentBrush" Color="#FFFF8A00" />
+    <SolidColorBrush x:Key="AccentLightBrush" Color="#FFFFB04A" />
+    <SolidColorBrush x:Key="TabBlueBrush" Color="#FF42A5F5" />
+    <SolidColorBrush x:Key="TabBlueLightBrush" Color="#FF90CAF9" />
+    <SolidColorBrush x:Key="TabBlueDarkBrush" Color="#FF174A70" />
+    <SolidColorBrush x:Key="SystemControlHighlightAccentBrush" Color="#FFFF8A00" />
+    <SolidColorBrush x:Key="SystemControlHighlightAltAccentBrush" Color="#FFFFB04A" />
+    <SolidColorBrush x:Key="SystemControlHighlightListAccentLowBrush" Color="#33FF8A00" />
+    <SolidColorBrush x:Key="SystemControlHighlightListAccentMediumBrush" Color="#66FF8A00" />
+    <SolidColorBrush x:Key="SystemControlHighlightListAccentHighBrush" Color="#99FF8A00" />
+
+    <Style x:Key="CardBorderStyle" TargetType="Border">
+      <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource SectionLineBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+    <Style TargetType="Button">
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Background" Value="#FF173D2F" />
+      <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="MinHeight" Value="38" />
+      <Setter Property="Padding" Value="14,6" />
+    </Style>
+    <Style TargetType="ComboBox">
+      <Setter Property="MinHeight" Value="38" />
+    </Style>
   </Page.Resources>
 
-  <Grid Background="Black">
+  <Grid Background="#FF061A14">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
@@ -28,16 +56,18 @@
         Grid.Row="0"
         Height="56"
         Background="{StaticResource HeaderBackgroundBrush}"
+        BorderBrush="{StaticResource AccentBrush}"
+        BorderThickness="0,0,0,2"
         Foreground="White"
         HorizontalContentAlignment="Right">
       <CommandBar.Content>
         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
           <FontIcon Glyph="&#xE768;" Foreground="{StaticResource AccentBrush}" FontSize="22" />
           <StackPanel>
-            <TextBlock Text="QEMU UWP Host" Foreground="White" FontWeight="SemiBold" />
+            <TextBlock Text="Xbox Virtual Machine" Foreground="White" FontWeight="SemiBold" FontSize="16" />
             <TextBlock
                 x:Name="statusText"
-                Text="Select boot media, review qemu_cmd_line, then start."
+                Text="Choose a disk or CD image, select a profile if needed, then press Start."
                 Foreground="{StaticResource MutedTextBrush}"
                 FontSize="12"
                 TextTrimming="CharacterEllipsis"
@@ -50,12 +80,12 @@
         </StackPanel>
       </CommandBar.Content>
       <CommandBar.PrimaryCommands>
-        <AppBarButton x:Name="showTabsButton" Icon="Setting" Label="Hide tabs" Click="ShowTabsButton_Click" Foreground="White" />
-        <AppBarButton x:Name="startButton" Icon="Play" Label="Start" Click="StartButton_Click" Foreground="White" />
-        <AppBarButton x:Name="pauseButton" Icon="Pause" Label="Pause" Click="PauseButton_Click" Foreground="White" IsEnabled="False" IsTabStop="False" />
-        <AppBarButton x:Name="resumeButton" Icon="Play" Label="Resume" Click="ResumeButton_Click" Foreground="White" IsEnabled="False" IsTabStop="False" />
-        <AppBarButton x:Name="stopButton" Icon="Stop" Label="Stop" Click="StopButton_Click" Foreground="White" IsEnabled="False" IsTabStop="False" />
-        <AppBarButton x:Name="shutdownButton" Label="Shutdown" Click="ShutdownButton_Click" Foreground="White" IsEnabled="False" IsTabStop="False">
+        <AppBarButton x:Name="showTabsButton" Icon="Setting" Label="Hide settings" Click="ShowTabsButton_Click" Foreground="White" ToolTipService.ToolTip="Show or hide setup options" />
+        <AppBarButton x:Name="startButton" Icon="Play" Label="Start" Click="StartButton_Click" Foreground="White" Background="{StaticResource AccentBrush}" ToolTipService.ToolTip="Start the virtual machine" />
+        <AppBarButton x:Name="pauseButton" Icon="Pause" Label="Pause" Click="PauseButton_Click" Foreground="White" IsEnabled="False" IsTabStop="False" ToolTipService.ToolTip="Pause virtual CPUs while keeping the virtual machine open" />
+        <AppBarButton x:Name="resumeButton" Icon="Play" Label="Resume" Click="ResumeButton_Click" Foreground="White" IsEnabled="False" IsTabStop="False" ToolTipService.ToolTip="Resume a paused virtual machine" />
+        <AppBarButton x:Name="stopButton" Icon="Stop" Label="Stop" Click="StopButton_Click" Foreground="White" IsEnabled="False" IsTabStop="False" ToolTipService.ToolTip="Force the emulator session to stop" />
+        <AppBarButton x:Name="shutdownButton" Label="Shutdown" Click="ShutdownButton_Click" Foreground="White" IsEnabled="False" IsTabStop="False" ToolTipService.ToolTip="Request a graceful guest shutdown">
           <AppBarButton.Icon>
             <FontIcon Glyph="&#xE7E8;" />
           </AppBarButton.Icon>
@@ -68,9 +98,9 @@
 
       <Grid x:Name="readyOverlay" IsHitTestVisible="False" Visibility="Collapsed">
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
-          <TextBlock Text="QEMU Host Ready" Foreground="White" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
-          <TextBlock Text="Choose media, review qemu_cmd_line, then press Start." Foreground="{StaticResource MutedTextBrush}" HorizontalAlignment="Center" />
-          <FontIcon Glyph="&#xE768;" Foreground="White" FontSize="56" HorizontalAlignment="Center" Opacity="0.95" />
+          <TextBlock Text="Ready to start" Foreground="White" FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" />
+          <TextBlock Text="Choose a startup disk and press Start when you are ready." Foreground="{StaticResource MutedTextBrush}" HorizontalAlignment="Center" />
+          <FontIcon Glyph="&#xE768;" Foreground="{StaticResource AccentBrush}" FontSize="56" HorizontalAlignment="Center" Opacity="0.95" />
         </StackPanel>
       </Grid>
 
@@ -80,6 +110,44 @@
           <TextBlock x:Name="rfbRuntimeStatusText" Text="RFB server: disabled" Foreground="{StaticResource MutedTextBrush}" FontSize="15" TextWrapping="WrapWholeWords" TextAlignment="Center" HorizontalAlignment="Center" />
         </StackPanel>
       </Grid>
+
+      <Border
+          x:Name="metricsOverlay"
+          HorizontalAlignment="Left"
+          VerticalAlignment="Top"
+          Margin="16"
+          Padding="12,9"
+          CornerRadius="8"
+          Background="#DB061A14"
+          BorderBrush="{StaticResource TabBlueBrush}"
+          BorderThickness="1"
+          IsHitTestVisible="False"
+          Visibility="Collapsed">
+        <StackPanel Spacing="7">
+          <StackPanel Orientation="Horizontal" Spacing="7">
+            <FontIcon Glyph="&#xE9D9;" Foreground="{StaticResource TabBlueLightBrush}" FontSize="14" />
+            <TextBlock Text="METRICS" Foreground="{StaticResource TabBlueLightBrush}" FontWeight="SemiBold" FontSize="12" />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="18">
+            <StackPanel MinWidth="86">
+              <TextBlock Text="Boot" Foreground="{StaticResource MutedTextBrush}" FontSize="11" />
+              <TextBlock x:Name="bootMetricText" Text="Measuring..." Foreground="White" FontWeight="SemiBold" />
+            </StackPanel>
+            <StackPanel MinWidth="86">
+              <TextBlock Text="RAM" Foreground="{StaticResource MutedTextBrush}" FontSize="11" />
+              <TextBlock x:Name="ramMetricText" Text="-- MB" Foreground="White" FontWeight="SemiBold" />
+            </StackPanel>
+            <StackPanel MinWidth="72">
+              <TextBlock Text="FPS" Foreground="{StaticResource MutedTextBrush}" FontSize="11" />
+              <TextBlock x:Name="fpsMetricText" Text="0.0" Foreground="White" FontWeight="SemiBold" />
+            </StackPanel>
+            <StackPanel MinWidth="72">
+              <TextBlock Text="CPU" Foreground="{StaticResource MutedTextBrush}" FontSize="11" />
+              <TextBlock x:Name="cpuMetricText" Text="0.0%" Foreground="White" FontWeight="SemiBold" />
+            </StackPanel>
+          </StackPanel>
+        </StackPanel>
+      </Border>
 
       <ScrollViewer
           x:Name="topPanel"
@@ -93,18 +161,65 @@
             <RowDefinition Height="*" />
           </Grid.RowDefinitions>
 <Pivot x:Name="tabPanel" Grid.Row="0" Foreground="White" Background="Transparent">
+            <Pivot.Resources>
+              <SolidColorBrush x:Key="PivotHeaderItemForeground" Color="#FF90CAF9" />
+              <SolidColorBrush x:Key="PivotHeaderItemForegroundSelected" Color="#FFFFFFFF" />
+              <SolidColorBrush x:Key="PivotHeaderItemForegroundPointerOver" Color="#FFBBDEFB" />
+              <SolidColorBrush x:Key="PivotHeaderItemForegroundPressed" Color="#FFFFFFFF" />
+              <SolidColorBrush x:Key="PivotHeaderItemBackground" Color="#22174A70" />
+              <SolidColorBrush x:Key="PivotHeaderItemBackgroundSelected" Color="#CC174A70" />
+              <SolidColorBrush x:Key="PivotHeaderItemBackgroundPointerOver" Color="#8842A5F5" />
+              <SolidColorBrush x:Key="PivotHeaderItemBackgroundPressed" Color="#FF174A70" />
+            </Pivot.Resources>
             <PivotItem AutomationProperties.Name="Boot">
               <PivotItem.Header>
-                <SymbolIcon Symbol="Play" />
+                <SymbolIcon Symbol="Play" Foreground="{StaticResource TabBlueLightBrush}" />
               </PivotItem.Header>
               <StackPanel Padding="16,14,16,20" Spacing="14">
                 <StackPanel Spacing="3">
-                  <TextBlock Text="Boot" Foreground="White" FontSize="20" FontWeight="SemiBold" />
-                  <TextBlock Text="Choose media and review the generated QEMU host command before starting." Foreground="{StaticResource MutedTextBrush}" TextWrapping="WrapWholeWords" />
+                  <TextBlock Text="Set up your virtual machine" Foreground="White" FontSize="24" FontWeight="SemiBold" />
+                  <TextBlock Text="For most systems, choose a disk or CD image and keep the recommended settings." Foreground="{StaticResource MutedTextBrush}" TextWrapping="WrapWholeWords" />
                 </StackPanel>
 
-                <TextBlock Text="MEDIA" Foreground="White" FontWeight="SemiBold" />
-                <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource SectionLineBrush}" BorderThickness="1" Padding="12">
+                <Border Background="{StaticResource GuideBackgroundBrush}" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" CornerRadius="8" Padding="16">
+                  <Grid ColumnSpacing="18">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
+                      <Border Width="30" Height="30" CornerRadius="15" Background="{StaticResource AccentBrush}">
+                        <TextBlock Text="1" Foreground="Black" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
+                      <StackPanel>
+                        <TextBlock Text="Choose startup media" Foreground="White" FontWeight="SemiBold" />
+                        <TextBlock Text="Select a disk or installation CD." Foreground="{StaticResource MutedTextBrush}" FontSize="12" TextWrapping="WrapWholeWords" />
+                      </StackPanel>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                      <Border Width="30" Height="30" CornerRadius="15" Background="{StaticResource AccentBrush}">
+                        <TextBlock Text="2" Foreground="Black" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
+                      <StackPanel>
+                        <TextBlock Text="Keep recommended settings" Foreground="White" FontWeight="SemiBold" />
+                        <TextBlock Text="Change a profile only when needed." Foreground="{StaticResource MutedTextBrush}" FontSize="12" TextWrapping="WrapWholeWords" />
+                      </StackPanel>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10">
+                      <Border Width="30" Height="30" CornerRadius="15" Background="{StaticResource AccentBrush}">
+                        <TextBlock Text="3" Foreground="Black" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
+                      <StackPanel>
+                        <TextBlock Text="Press Start" Foreground="White" FontWeight="SemiBold" />
+                        <TextBlock Text="The orange button is in the top bar." Foreground="{StaticResource MutedTextBrush}" FontSize="12" TextWrapping="WrapWholeWords" />
+                      </StackPanel>
+                    </StackPanel>
+                  </Grid>
+                </Border>
+
+                <TextBlock Text="1  STARTUP MEDIA" Foreground="{StaticResource AccentLightBrush}" FontWeight="SemiBold" />
+                <Border Style="{StaticResource CardBorderStyle}" Padding="12">
                   <StackPanel Spacing="12">
                     <Grid>
                       <Grid.ColumnDefinitions>
@@ -114,15 +229,15 @@
                         <ColumnDefinition Width="Auto" />
                       </Grid.ColumnDefinitions>
                       <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                        <TextBlock Text="Drive media" Foreground="White" FontWeight="SemiBold" />
-                        <TextBlock Text="RAW, QCOW, VDI, VMDK, VHD/VHDX, DMG, QED or qemu_cmd_line" Foreground="{StaticResource MutedTextBrush}" FontSize="12" TextWrapping="WrapWholeWords" />
+                        <TextBlock Text="Virtual hard disk" Foreground="White" FontWeight="SemiBold" />
+                        <TextBlock Text="Use this for an installed operating system or a blank virtual disk." Foreground="{StaticResource MutedTextBrush}" FontSize="12" TextWrapping="WrapWholeWords" />
                       </StackPanel>
                       <StackPanel Grid.Column="1" Spacing="6" Margin="12,0" VerticalAlignment="Center">
                         <TextBlock x:Name="selectedDriveText" Text="No drive selected" Foreground="{StaticResource MutedTextBrush}" TextWrapping="WrapWholeWords" />
                         <ComboBox x:Name="driveMediaHistoryBox" Header="Used drive media" PlaceholderText="Select from boot_media" HorizontalAlignment="Stretch" SelectionChanged="DriveMediaHistory_SelectionChanged" />
                       </StackPanel>
-                      <AppBarButton Grid.Column="2" Icon="OpenFile" Label="Select drive" Click="SelectDriveButton_Click" Foreground="White" />
-                      <AppBarButton Grid.Column="3" Icon="Delete" Label="Remove drive" Click="RemoveDriveButton_Click" Foreground="White" />
+                      <AppBarButton Grid.Column="2" Icon="OpenFile" Label="Choose disk" Click="SelectDriveButton_Click" Foreground="White" ToolTipService.ToolTip="Choose a virtual hard disk image" />
+                      <AppBarButton Grid.Column="3" Icon="Delete" Label="Remove" Click="RemoveDriveButton_Click" Foreground="White" ToolTipService.ToolTip="Remove the selected disk" />
                     </Grid>
                     <Grid>
                       <Grid.ColumnDefinitions>
@@ -132,15 +247,15 @@
                         <ColumnDefinition Width="Auto" />
                       </Grid.ColumnDefinitions>
                       <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                        <TextBlock Text="CD-ROM media" Foreground="White" FontWeight="SemiBold" />
-                        <TextBlock Text="ISO, raw or QEMU image mounted as CD-ROM" Foreground="{StaticResource MutedTextBrush}" FontSize="12" TextWrapping="WrapWholeWords" />
+                        <TextBlock Text="Installation CD or DVD" Foreground="White" FontWeight="SemiBold" />
+                        <TextBlock Text="Choose an ISO or another supported disc image." Foreground="{StaticResource MutedTextBrush}" FontSize="12" TextWrapping="WrapWholeWords" />
                       </StackPanel>
                       <StackPanel Grid.Column="1" Spacing="6" Margin="12,0" VerticalAlignment="Center">
                         <TextBlock x:Name="selectedCdromText" Text="No CD-ROM selected" Foreground="{StaticResource MutedTextBrush}" TextWrapping="WrapWholeWords" />
                         <ComboBox x:Name="cdromMediaHistoryBox" Header="Used CD-ROM media" PlaceholderText="Select from boot_media" HorizontalAlignment="Stretch" SelectionChanged="CdromMediaHistory_SelectionChanged" />
                       </StackPanel>
-                      <AppBarButton Grid.Column="2" Icon="OpenFile" Label="Select CD-ROM" Click="SelectCdromButton_Click" Foreground="White" />
-                      <AppBarButton Grid.Column="3" Icon="Delete" Label="Remove CD-ROM" Click="RemoveCdromButton_Click" Foreground="White" />
+                      <AppBarButton Grid.Column="2" Icon="OpenFile" Label="Choose ISO" Click="SelectCdromButton_Click" Foreground="White" ToolTipService.ToolTip="Choose an installation disc image" />
+                      <AppBarButton Grid.Column="3" Icon="Delete" Label="Remove" Click="RemoveCdromButton_Click" Foreground="White" ToolTipService.ToolTip="Remove the selected disc image" />
                     </Grid>
                     <Grid>
                       <Grid.ColumnDefinitions>
@@ -264,8 +379,8 @@
                   </StackPanel>
                 </Border>
 
-                <TextBlock Text="RFB SERVER" Foreground="White" FontWeight="SemiBold" />
-                <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource SectionLineBrush}" BorderThickness="1" Padding="12">
+                <TextBlock Text="ADVANCED: REMOTE DISPLAY" Foreground="{StaticResource AccentLightBrush}" FontWeight="SemiBold" Visibility="Collapsed" />
+                <Border Style="{StaticResource CardBorderStyle}" Padding="12" Visibility="Collapsed">
                   <StackPanel Spacing="10">
                     <Grid ColumnSpacing="10" RowSpacing="8">
                       <Grid.ColumnDefinitions>
@@ -284,8 +399,8 @@
                   </StackPanel>
                 </Border>
 
-                <TextBlock Text="FIRMWARE AND DIRECT KERNEL BOOT" Foreground="White" FontWeight="SemiBold" />
-                <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource SectionLineBrush}" BorderThickness="1" Padding="12">
+                <TextBlock Text="ADVANCED: FIRMWARE AND DIRECT BOOT" Foreground="{StaticResource AccentLightBrush}" FontWeight="SemiBold" />
+                <Border Style="{StaticResource CardBorderStyle}" Padding="12">
                   <StackPanel Spacing="10">
                     <Grid ColumnSpacing="10" RowSpacing="8">
                       <Grid.ColumnDefinitions>
@@ -331,23 +446,17 @@
                       <TextBox x:Name="kernelAppendBox" Header="Kernel append" PlaceholderText="root=/dev/sda1 console=ttyS0" TextWrapping="NoWrap" TextChanged="DirectBootText_Changed" />
                       <Button x:Name="clearKernelAppendButton" Grid.Column="1" Content="Clear Kernel append" Margin="8,24,0,0" Click="ClearKernelAppendButton_Click" />
                     </Grid>
-                    <TextBox x:Name="shadps4TitleIdBox" Header="ShadPS4 Title ID" PlaceholderText="CUSA02456 (used only by the shadps4 target)" TextWrapping="NoWrap" TextChanged="DirectBootText_Changed" />
-                    <ComboBox x:Name="shadps4VariantBox" Header="ShadPS4 console variant" SelectedIndex="0" SelectionChanged="QemuSelector_Changed">
-                      <ComboBoxItem Content="PS4 Liverpool / Base" Tag="base" />
-                      <ComboBoxItem Content="PS4 Pro / Neo" Tag="neo" />
-                    </ComboBox>
                     <TextBlock Text="Selectors are populated from packaged qemu files and LocalFolder\\boot_media. Manual paths remain editable for advanced cases." Foreground="{StaticResource MutedTextBrush}" FontSize="12" TextWrapping="WrapWholeWords" />
                   </StackPanel>
                 </Border>
 
-                <TextBlock Text="MACHINE" Foreground="White" FontWeight="SemiBold" />
-                <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource SectionLineBrush}" BorderThickness="1" Padding="12">
+                <TextBlock Text="2  PERFORMANCE AND COMPATIBILITY" Foreground="{StaticResource AccentLightBrush}" FontWeight="SemiBold" />
+                <Border Style="{StaticResource CardBorderStyle}" Padding="12">
                   <StackPanel Spacing="12">
                     <StackPanel Spacing="4">
-                      <TextBlock Text="Architecture" Foreground="White" FontWeight="SemiBold" />
-                      <ComboBox x:Name="architectureBox" Header="QEMU target" SelectedIndex="0" Width="220" HorizontalAlignment="Left" SelectionChanged="Architecture_Changed">
+                      <TextBlock Text="Target" Foreground="White" FontWeight="SemiBold" />
+                      <ComboBox x:Name="architectureBox" Header="Emulator target (fixed)" SelectedIndex="0" Width="220" HorizontalAlignment="Left" IsEnabled="False" SelectionChanged="Architecture_Changed">
                         <ComboBoxItem Content="x86_64" />
-                        <ComboBoxItem Content="i386" />
                       </ComboBox>
                       <StackPanel x:Name="targetLoadingPanel" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
                         <ProgressBar x:Name="targetLoadingBar" Width="180" Height="4" IsIndeterminate="True" />
@@ -357,19 +466,22 @@
 
                     <StackPanel Spacing="4">
                       <TextBlock Text="Memory" Foreground="White" FontWeight="SemiBold" />
-                      <Grid>
-                        <Grid.ColumnDefinitions>
-                          <ColumnDefinition Width="*" />
-                          <ColumnDefinition Width="120" />
-                        </Grid.ColumnDefinitions>
-                        <Slider x:Name="memorySlider" Minimum="0" Maximum="8192" Value="512" StepFrequency="16" TickFrequency="1024" Foreground="{StaticResource AccentBrush}" ValueChanged="MemorySlider_ValueChanged" />
-                        <TextBlock x:Name="memoryValueText" Grid.Column="1" Text="512 MB" Foreground="White" FontWeight="SemiBold" TextAlignment="Right" VerticalAlignment="Center" />
-                      </Grid>
-                      <TextBlock Text="The command uses the selected display profile and disables host audio for now. 0 MB uses the QEMU default memory." Foreground="{StaticResource MutedTextBrush}" FontSize="12" TextWrapping="WrapWholeWords" />
+                      <ComboBox x:Name="memoryBox" SelectedIndex="3" HorizontalAlignment="Stretch" SelectionChanged="MemoryBox_SelectionChanged">
+                        <ComboBoxItem Content="64 MB" Tag="64" />
+                        <ComboBoxItem Content="128 MB" Tag="128" />
+                        <ComboBoxItem Content="256 MB" Tag="256" />
+                        <ComboBoxItem Content="512 MB" Tag="512" />
+                        <ComboBoxItem Content="1024 MB" Tag="1024" />
+                        <ComboBoxItem Content="2048 MB" Tag="2048" />
+                        <ComboBoxItem Content="3072 MB" Tag="3072" />
+                        <ComboBoxItem Content="4096 MB" Tag="4096" />
+                        <ComboBoxItem Content="5120 MB" Tag="5120" />
+                      </ComboBox>
+                      <TextBlock Text="Memory available to the virtual system. 1024 MB is a good starting point for most profiles." Foreground="{StaticResource MutedTextBrush}" FontSize="12" TextWrapping="WrapWholeWords" />
                     </StackPanel>
 
                     <StackPanel Spacing="8">
-                      <TextBlock Text="QEMU selectors" Foreground="White" FontWeight="SemiBold" />
+                      <TextBlock Text="Advanced virtual hardware" Foreground="White" FontWeight="SemiBold" />
                       <Grid ColumnSpacing="10" RowSpacing="8">
                         <Grid.ColumnDefinitions>
                           <ColumnDefinition Width="*" />
@@ -387,7 +499,7 @@
                         <ComboBox x:Name="monitorSelectorBox" Header="Monitor" Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch" SelectionChanged="QemuSelector_Changed" />
                         <ComboBox x:Name="netdevSelectorBox" Header="Netdev" Grid.Row="1" Grid.Column="2" HorizontalAlignment="Stretch" SelectionChanged="QemuSelector_Changed" />
                       </Grid>
-                      <TextBlock Text="Options are filtered from strings found in the packaged DLL for the selected QEMU target." Foreground="{StaticResource MutedTextBrush}" FontSize="12" TextWrapping="WrapWholeWords" />
+                      <TextBlock Text="Leave these options on Auto unless a guest requires specific hardware." Foreground="{StaticResource MutedTextBrush}" FontSize="12" TextWrapping="WrapWholeWords" />
                     </StackPanel>
 
                     <StackPanel Spacing="8">
@@ -405,10 +517,9 @@
                           <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <ComboBox x:Name="smpSelectorBox" Header="SMP" Grid.Row="0" Grid.Column="0" HorizontalAlignment="Stretch" SelectedIndex="0" SelectionChanged="QemuSelector_Changed">
-                          <ComboBoxItem Content="1 CPU" Tag="1" />
-                          <ComboBoxItem Content="2 CPUs" Tag="2" />
-                          <ComboBoxItem Content="4 CPUs" Tag="4" />
-                          <ComboBoxItem Content="8 CPUs" Tag="8" />
+                          <ComboBoxItem Content="2 vCPUs (recommended)" Tag="2" />
+                          <ComboBoxItem Content="4 vCPUs" Tag="4" />
+                          <ComboBoxItem Content="6 vCPUs" Tag="6" />
                         </ComboBox>
                         <ComboBox x:Name="rtcSelectorBox" Header="RTC" Grid.Row="0" Grid.Column="1" HorizontalAlignment="Stretch" SelectedIndex="0" SelectionChanged="QemuSelector_Changed">
                           <ComboBoxItem Content="Auto" Tag="" />
@@ -447,7 +558,7 @@
                         <ComboBox x:Name="networkDeviceSelectorBox" Header="Network model" Grid.Row="3" Grid.Column="0" HorizontalAlignment="Stretch" SelectionChanged="QemuSelector_Changed" />
                         <ComboBox x:Name="audioDeviceSelectorBox" Header="Audio model" Grid.Row="3" Grid.Column="1" HorizontalAlignment="Stretch" SelectionChanged="QemuSelector_Changed" />
                       </Grid>
-                      <TextBlock Text="These controls cover common compatibility fixes. SMP defaults to 1; target-specific devices are filtered from the selected QEMU DLL." Foreground="{StaticResource MutedTextBrush}" FontSize="12" TextWrapping="WrapWholeWords" />
+                      <TextBlock Text="These controls cover common compatibility fixes. The default is 2 vCPUs; select 4 or 6 vCPUs for guests that benefit from more parallel processing." Foreground="{StaticResource MutedTextBrush}" FontSize="12" TextWrapping="WrapWholeWords" />
                     </StackPanel>
 
                     <StackPanel Spacing="4">
@@ -489,74 +600,77 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                           </Grid.ColumnDefinitions>
-                          <TextBox x:Name="extraArgumentsBox" Header="Additional QEMU arguments" PlaceholderText="-vga std -no-reboot" TextWrapping="NoWrap" />
-                          <Button Grid.Column="1" Content="Update qemu commands" Margin="10,24,0,0" Click="UpdateCommandLineButton_Click" />
+                          <TextBox x:Name="extraArgumentsBox" Header="Additional emulator arguments (advanced)" PlaceholderText="-vga std -no-reboot" TextWrapping="NoWrap" />
+                          <Button Grid.Column="1" Content="Update command preview" Margin="10,24,0,0" Click="UpdateCommandLineButton_Click" />
                         </Grid>
                       </Grid>
                     </StackPanel>
 
                     <StackPanel Spacing="4">
-                      <TextBlock Text="Profiles" Foreground="White" FontWeight="SemiBold" />
-                      <ComboBox x:Name="diagnosticProfileBox" Header="QEMU startups" SelectedIndex="0" Width="360" HorizontalAlignment="Left" SelectionChanged="DiagnosticProfile_Changed">
+                      <TextBlock Text="Recommended profiles" Foreground="White" FontWeight="SemiBold" />
+                      <ComboBox x:Name="diagnosticProfileBox" Header="Startup profile" SelectedIndex="0" Width="360" HorizontalAlignment="Left" SelectionChanged="DiagnosticProfile_Changed">
                         <ComboBoxItem Content="Normal command" />
                         <ComboBoxItem Content="Video only no media" />
                         <ComboBoxItem Content="Linux cloud UEFI qcow2" />
                         <ComboBoxItem Content="Windows 98" />
                         <ComboBoxItem Content="Windows XP" />
                         <ComboBoxItem Content="Windows 7" />
+                        <ComboBoxItem Content="Xbox TCG 64 MB cache (2 vCPUs)" />
+                        <ComboBoxItem Content="Xbox TCG 128 MB cache (2 vCPUs)" />
+                        <ComboBoxItem Content="Xbox TCG 256 MB cache (4 vCPUs)" />
                       </ComboBox>
-                      <TextBlock Text="Profiles add conservative target-aware machine, CPU, video, mouse and boot options. Normal command keeps the selected target defaults, and Video only no media tests host display without a disk." Foreground="{StaticResource MutedTextBrush}" FontSize="12" TextWrapping="WrapWholeWords" />
+                      <TextBlock Text="Multi-threaded TCG is always enabled. Xbox TCG profiles select a 64, 128 or 256 MB translation cache and use 2 or 4 vCPUs; this cache is separate from guest memory." Foreground="{StaticResource MutedTextBrush}" FontSize="12" TextWrapping="WrapWholeWords" />
                     </StackPanel>
                   </StackPanel>
                 </Border>
               </StackPanel>
             </PivotItem>
 
-            <PivotItem AutomationProperties.Name="Errors">
+            <PivotItem AutomationProperties.Name="Diagnostics">
               <PivotItem.Header>
-                <SymbolIcon Symbol="Comment" />
+                <SymbolIcon Symbol="Comment" Foreground="{StaticResource TabBlueLightBrush}" />
               </PivotItem.Header>
               <StackPanel Padding="16,14,16,24" Spacing="14">
                 <StackPanel Spacing="4">
-                  <TextBlock Text="Errors" Foreground="White" FontSize="20" FontWeight="SemiBold" />
-                  <TextBlock Text="Runtime and configuration problems are collected here." Foreground="{StaticResource MutedTextBrush}" TextWrapping="WrapWholeWords" />
+                  <TextBlock Text="Help and diagnostics" Foreground="White" FontSize="20" FontWeight="SemiBold" />
+                  <TextBlock Text="If something does not start, details and diagnostic tools appear here." Foreground="{StaticResource MutedTextBrush}" TextWrapping="WrapWholeWords" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="10">
-                  <Button x:Name="detectTargetsButton" Content="Inspect QEMU host API" Click="DetectTargetsButton_Click" />
-                  <Button x:Name="testPackagedDllsButton" Content="Test packaged DLLs" Click="TestPackagedDllsButton_Click" />
-                  <Button x:Name="clearErrorsButton" Content="Clear errors" Click="ClearErrorsButton_Click" />
+                  <Button x:Name="detectTargetsButton" Content="Inspect emulator connection" Click="DetectTargetsButton_Click" />
+                  <Button x:Name="testPackagedDllsButton" Content="Test emulator files" Click="TestPackagedDllsButton_Click" />
+                  <Button x:Name="clearErrorsButton" Content="Clear messages" Click="ClearErrorsButton_Click" />
                 </StackPanel>
-                <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource SectionLineBrush}" BorderThickness="1" Padding="12">
+                <Border Style="{StaticResource CardBorderStyle}" Padding="12">
                   <TextBox x:Name="errorLogBox" Text="No errors recorded." IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" MinHeight="520" HorizontalAlignment="Stretch" ScrollViewer.VerticalScrollBarVisibility="Auto" />
                 </Border>
               </StackPanel>
             </PivotItem>
 
-            <PivotItem AutomationProperties.Name="qemu commands">
+            <PivotItem AutomationProperties.Name="Command details">
               <PivotItem.Header>
-                <SymbolIcon Symbol="Page" />
+                <SymbolIcon Symbol="Page" Foreground="{StaticResource TabBlueLightBrush}" />
               </PivotItem.Header>
               <StackPanel Padding="16,14,16,24" Spacing="14">
                 <StackPanel Spacing="4">
-                  <TextBlock Text="qemu commands" Foreground="White" FontSize="20" FontWeight="SemiBold" />
-                  <TextBlock Text="Review or edit the command intended for the selected qemu-system target." Foreground="{StaticResource MutedTextBrush}" TextWrapping="WrapWholeWords" />
+                  <TextBlock Text="Command details" Foreground="White" FontSize="20" FontWeight="SemiBold" />
+                  <TextBlock Text="Advanced view: inspect or edit the command used to start the virtual machine." Foreground="{StaticResource MutedTextBrush}" TextWrapping="WrapWholeWords" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="10">
                   <Button x:Name="resetCommandsButton" Content="Reset to startup defaults" Click="ResetCommandsButton_Click" />
-                  <Button x:Name="alignCommandsButton" Content="Align commands vertically" Click="AlignCommandsButton_Click" />
+                  <Button x:Name="alignCommandsButton" Content="Format command" Click="AlignCommandsButton_Click" />
                 </StackPanel>
                 <StackPanel Spacing="6">
                   <TextBlock Text="Color preview" Foreground="White" FontWeight="SemiBold" />
                   <StackPanel Orientation="Horizontal" Spacing="12">
                     <TextBlock Text="Automatic/app-selected" Foreground="#FF66D9EF" />
-                    <TextBlock Text="Additional QEMU arguments" Foreground="#FFFFCC66" />
+                    <TextBlock Text="Additional arguments" Foreground="{StaticResource AccentLightBrush}" />
                   </StackPanel>
-                  <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource SectionLineBrush}" BorderThickness="1" Padding="10">
+                  <Border Style="{StaticResource CardBorderStyle}" Padding="10">
                     <RichTextBlock x:Name="commandPreviewBlock" FontFamily="Consolas" TextWrapping="Wrap" />
                   </Border>
                 </StackPanel>
-                <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource SectionLineBrush}" BorderThickness="1" Padding="12">
-                  <TextBox x:Name="commandLineBox" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" MinHeight="520" Header="Generated command" PlaceholderText="The generated qemu command will appear here." ScrollViewer.VerticalScrollBarVisibility="Auto" TextChanged="CommandLineBox_TextChanged" />
+                <Border Style="{StaticResource CardBorderStyle}" Padding="12">
+                  <TextBox x:Name="commandLineBox" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" MinHeight="520" Header="Generated command" PlaceholderText="The generated startup command will appear here." ScrollViewer.VerticalScrollBarVisibility="Auto" TextChanged="CommandLineBox_TextChanged" />
                 </Border>
               </StackPanel>
             </PivotItem>

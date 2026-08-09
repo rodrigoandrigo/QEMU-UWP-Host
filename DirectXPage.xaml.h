@@ -87,7 +87,7 @@ namespace Qemu_UWP_host
 		void RfbPort_TextChanged(Platform::Object^ sender, Windows::UI::Xaml::Controls::TextChangedEventArgs^ e);
 		void Architecture_Changed(Platform::Object^ sender, Windows::UI::Xaml::Controls::SelectionChangedEventArgs^ e);
 		void DiagnosticProfile_Changed(Platform::Object^ sender, Windows::UI::Xaml::Controls::SelectionChangedEventArgs^ e);
-		void MemorySlider_ValueChanged(Platform::Object^ sender, Windows::UI::Xaml::Controls::Primitives::RangeBaseValueChangedEventArgs^ e);
+		void MemoryBox_SelectionChanged(Platform::Object^ sender, Windows::UI::Xaml::Controls::SelectionChangedEventArgs^ e);
 		void OnKeyDown(Windows::UI::Core::CoreWindow^ sender, Windows::UI::Core::KeyEventArgs^ args);
 		void OnKeyUp(Windows::UI::Core::CoreWindow^ sender, Windows::UI::Core::KeyEventArgs^ args);
 		void OnCompositionScaleChanged(Windows::UI::Xaml::Controls::SwapChainPanel^ sender, Object^ args);
@@ -152,6 +152,9 @@ namespace Qemu_UWP_host
 		void UpdateVmControlButtons();
 		unsigned MapVirtualKeyToQemuKey(Windows::System::VirtualKey key);
 		void GamepadPollTimer_Tick(Platform::Object^ sender, Platform::Object^ e);
+		void MetricsTimer_Tick(Platform::Object^ sender, Platform::Object^ e);
+		void ResetPerformanceMetrics();
+		void UpdatePerformanceMetrics();
 		void PollGamepad();
 		void BuildVirtualKeyboard();
 		void UpdateVirtualKeyboardVisibility();
@@ -215,6 +218,7 @@ namespace Qemu_UWP_host
 		Windows::UI::Xaml::DispatcherTimer^ m_argumentsHelpHideTimer;
 		Windows::UI::Xaml::DispatcherTimer^ m_bootMediaRefreshTimer;
 		Windows::UI::Xaml::DispatcherTimer^ m_gamepadPollTimer;
+		Windows::UI::Xaml::DispatcherTimer^ m_metricsTimer;
 		std::vector<VirtualKeyboardKey> m_virtualKeyboardKeys;
 		unsigned int m_gamepadPreviousButtons;
 		bool m_virtualKeyboardVisible;
@@ -238,7 +242,14 @@ namespace Qemu_UWP_host
 		bool m_isStarting;
 		bool m_isRunning;
 		bool m_isPaused;
+		bool m_isShutdownPending;
+		bool m_isStopPending;
 		bool m_expectHostVideoFrame;
+		uint64_t m_metricsStartTick;
+		uint64_t m_metricsLastSampleTick;
+		uint64_t m_metricsLastCpuTime100ns;
+		unsigned int m_metricsLastFrameCount;
+		bool m_metricsBootComplete;
 		bool m_windowVisible;
 		bool m_inputCaptured;
 		Windows::UI::Core::CoreCursor^ m_visiblePointerCursor;

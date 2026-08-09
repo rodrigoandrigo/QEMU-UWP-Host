@@ -14,9 +14,11 @@
 #include <cwchar>
 #include <cwctype>
 #include <initializer_list>
+#include <iomanip>
 #include <ppltasks.h>
 #include <set>
 #include <sstream>
+#include <thread>
 #include <vector>
 
 using namespace Qemu_UWP_host;
@@ -34,6 +36,7 @@ using namespace Windows::Storage;
 using namespace Windows::Storage::Pickers;
 using namespace Windows::Storage::Streams;
 using namespace Windows::System;
+using namespace Windows::System::Diagnostics;
 using namespace Windows::System::Threading;
 using namespace Windows::UI;
 using namespace Windows::UI::Core;
@@ -56,6 +59,9 @@ namespace
 	const int ProfileWindows98 = 3;
 	const int ProfileWindowsXp = 4;
 	const int ProfileWindows7 = 5;
+	const int ProfileXboxTcg64 = 6;
+	const int ProfileXboxTcg128 = 7;
+	const int ProfileXboxTcg256 = 8;
 	const int BootDeviceAuto = 0;
 	const int BootDeviceDrive = 1;
 	const int BootDeviceCdrom = 2;
@@ -370,28 +376,6 @@ namespace
 		return IsAnyTarget(target, { L"i386", L"x86_64" });
 	}
 
-	bool IsShadPs4Target(const std::wstring& target)
-	{
-		return IsAnyTarget(target, { L"shadps4" });
-	}
-
-	bool IsShadPs4TitleId(const std::wstring& value)
-	{
-		if (value.empty() || value.size() > 32)
-		{
-			return false;
-		}
-		for (wchar_t character : value)
-		{
-			if (!((character >= L'A' && character <= L'Z') ||
-				(character >= L'0' && character <= L'9') || character == L'_' || character == L'-'))
-			{
-				return false;
-			}
-		}
-		return true;
-	}
-
 	bool TargetUsesPcCompatibilityDefaults(const std::wstring& target)
 	{
 		return IsX86Target(target);
@@ -413,10 +397,6 @@ namespace
 
 	TargetProfile GetTargetProfile(const std::wstring& target)
 	{
-		if (IsShadPs4Target(target))
-		{
-			return { 5248, L" -M shadps4,variant=base,execute=on", TargetBlockStyle::Ide };
-		}
 		if (IsAnyTarget(target, { L"x86_64" }))
 		{
 			return { 1024, L"", TargetBlockStyle::Ide };
@@ -1017,13 +997,19 @@ namespace
 		case ProfileLinuxCloudUefiQcow2:
 			return { L"q35", genericCpu, L"", L"std", L"none", L"user,id=net0", L"2", L"", L"", L"", L"", L"", L"on", L"", L"usb-tablet", L"e1000", L"", L" -serial none", true };
 		case ProfileWindows98:
-			return { L"pc", L"pentium2", L"", L"std", L"none", L"", L"1", L"base=localtime", L"", L"", L"", L"", L"", L"", L"", L"", L"", L" -serial none", false };
+			return { L"pc", L"pentium2", L"", L"std", L"none", L"", L"2", L"base=localtime", L"", L"", L"", L"", L"", L"", L"", L"", L"", L" -serial none", false };
 		case ProfileWindowsXp:
-			return { L"pc", L"pentium3", L"", L"std", L"none", L"user,id=net0", L"1", L"base=localtime", L"", L"", L"", L"", L"on", L"", L"usb-tablet", L"rtl8139", L"", L" -serial none", false };
+			return { L"pc", L"pentium3", L"", L"std", L"none", L"user,id=net0", L"2", L"base=localtime", L"", L"", L"", L"", L"on", L"", L"usb-tablet", L"rtl8139", L"", L" -serial none", false };
 		case ProfileWindows7:
-			return { L"pc", genericCpu, L"", L"std", L"none", L"user,id=net0", L"1", L"base=localtime", L"", L"", L"", L"", L"on", L"", L"usb-tablet", L"e1000", L"", L" -serial none", false };
+			return { L"pc", genericCpu, L"", L"std", L"none", L"user,id=net0", L"2", L"base=localtime", L"", L"", L"", L"", L"on", L"", L"usb-tablet", L"e1000", L"", L" -serial none", false };
+		case ProfileXboxTcg64:
+			return { L"", L"", L"", L"", L"", L"", L"2", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", false };
+		case ProfileXboxTcg128:
+			return { L"", L"", L"", L"", L"", L"", L"2", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", false };
+		case ProfileXboxTcg256:
+			return { L"", L"", L"", L"", L"", L"", L"4", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", false };
 		default:
-			return { L"", L"", L"", L"", L"", L"", L"1", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", false };
+			return { L"", L"", L"", L"", L"", L"", L"2", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", false };
 		}
 	}
 
@@ -1031,6 +1017,11 @@ namespace
 	{
 		QemuStartupProfile settings = GetQemuStartupProfile(profile, target);
 		std::wstring args = settings.extraArgs != nullptr ? settings.extraArgs : L"";
+		if (profile == ProfileXboxTcg64 || profile == ProfileXboxTcg128 || profile == ProfileXboxTcg256)
+		{
+			// The base x86_64 command owns the single TCG accelerator option.
+			args.clear();
+		}
 		if (settings.uefi && includeFirmware)
 		{
 			std::wstring biosPath = DefaultFirmwarePathForTarget(qemuDir, target, false);
@@ -1265,7 +1256,6 @@ namespace
 			"riscv32",
 			"riscv64",
 			"s390x",
-			"shadps4",
 			"sparc",
 			"sparc64",
 			"x86_64"
@@ -1318,12 +1308,15 @@ namespace
 			"qemu_host_main_loop_step",
 			"qemu_host_pause",
 			"qemu_host_resume",
+			"qemu_host_wake_main_loop",
 			"qemu_host_request_shutdown",
+			"qemu_host_request_stop",
 			"qemu_host_reset",
 			"qemu_host_join",
 			"qemu_host_cleanup",
 			"qemu_host_set_log_callback",
 			"qemu_host_set_video_callback",
+			"qemu_host_register_video_update_callback",
 			"qemu_host_set_audio_callback",
 			"qemu_host_set_input_callback",
 			"qemu_host_send_key_number",
@@ -1385,6 +1378,7 @@ DirectXPage::DirectXPage():
 	m_argumentsHelpHideTimer(nullptr),
 	m_bootMediaRefreshTimer(nullptr),
 	m_gamepadPollTimer(nullptr),
+	m_metricsTimer(nullptr),
 	m_gamepadPreviousButtons(0),
 	m_virtualKeyboardVisible(false),
 	m_gamepadTriggerToggleArmed(true),
@@ -1407,7 +1401,14 @@ DirectXPage::DirectXPage():
 	m_isStarting(false),
 	m_isRunning(false),
 	m_isPaused(false),
+	m_isShutdownPending(false),
+	m_isStopPending(false),
 	m_expectHostVideoFrame(false),
+	m_metricsStartTick(0),
+	m_metricsLastSampleTick(0),
+	m_metricsLastCpuTime100ns(0),
+	m_metricsLastFrameCount(0),
+	m_metricsBootComplete(false),
 	m_inputCaptured(true),
 	m_visiblePointerCursor(ref new CoreCursor(CoreCursorType::Arrow, 0)),
 	m_corePointerCaptureActive(false),
@@ -1453,17 +1454,23 @@ DirectXPage::DirectXPage():
 	m_gamepadPollTimer->Tick += ref new EventHandler<Object^>(this, &DirectXPage::GamepadPollTimer_Tick);
 	m_gamepadPollTimer->Start();
 
+	m_metricsTimer = ref new DispatcherTimer();
+	TimeSpan metricsRefreshDelay;
+	metricsRefreshDelay.Duration = 5000000;
+	m_metricsTimer->Interval = metricsRefreshDelay;
+	m_metricsTimer->Tick += ref new EventHandler<Object^>(this, &DirectXPage::MetricsTimer_Tick);
+
 	RefreshBootMediaState();
 	RefreshQemuTargetList();
 	RefreshQemuOptionSelectors(false);
 
-	if (architectureBox != nullptr && memorySlider != nullptr)
+	if (architectureBox != nullptr && memoryBox != nullptr)
 	{
 		ComboBoxItem^ selectedArch = dynamic_cast<ComboBoxItem^>(architectureBox->SelectedItem);
 		if (selectedArch != nullptr)
 		{
 			std::wstring target(selectedArch->Content->ToString()->Data());
-			memorySlider->Value = GetTargetProfile(target).memoryMb;
+			SelectComboBoxValue(memoryBox, std::to_wstring(GetTargetProfile(target).memoryMb));
 		}
 	}
 
@@ -1538,6 +1545,10 @@ DirectXPage::~DirectXPage()
 	if (m_gamepadPollTimer != nullptr)
 	{
 		m_gamepadPollTimer->Stop();
+	}
+	if (m_metricsTimer != nullptr)
+	{
+		m_metricsTimer->Stop();
 	}
 	// Stop rendering and event processing during destruction.
 	if (m_main)
@@ -2408,7 +2419,7 @@ void DirectXPage::ApplyProfileSelectors(int profile)
 		SelectComboBoxValue(vgaSelectorBox, L"");
 		SelectComboBoxValue(monitorSelectorBox, L"");
 		SelectComboBoxValue(netdevSelectorBox, L"");
-		SelectComboBoxValue(smpSelectorBox, L"1");
+		SelectComboBoxValue(smpSelectorBox, L"2");
 		SelectComboBoxValue(rtcSelectorBox, L"");
 		SelectComboBoxValue(rebootBehaviorBox, L"");
 		SelectComboBoxValue(acpiSelectorBox, L"");
@@ -2429,7 +2440,7 @@ void DirectXPage::ApplyProfileSelectors(int profile)
 	SelectComboBoxValue(vgaSelectorBox, settings.vga != nullptr ? settings.vga : L"");
 	SelectComboBoxValue(monitorSelectorBox, settings.monitor != nullptr ? settings.monitor : L"");
 	SelectComboBoxValue(netdevSelectorBox, settings.netdev != nullptr ? settings.netdev : L"");
-	SelectComboBoxValue(smpSelectorBox, settings.smp != nullptr ? settings.smp : L"1");
+	SelectComboBoxValue(smpSelectorBox, settings.smp != nullptr ? settings.smp : L"2");
 	SelectComboBoxValue(rtcSelectorBox, settings.rtc != nullptr ? settings.rtc : L"");
 	SelectComboBoxValue(rebootBehaviorBox, settings.rebootBehavior != nullptr ? settings.rebootBehavior : L"");
 	SelectComboBoxValue(acpiSelectorBox, settings.acpi != nullptr ? settings.acpi : L"");
@@ -2449,100 +2460,24 @@ void DirectXPage::RefreshQemuTargetList()
 		return;
 	}
 
-	std::wstring previous = SelectedQemuTarget();
-	std::wstring packagePath(Package::Current->InstalledLocation->Path->Data());
-	std::wstring search = packagePath + L"\\qemu-system-*.dll";
-	std::vector<std::wstring> targets;
-	WIN32_FIND_DATAW data = {};
-	HANDLE find = FindFirstFileExFromAppW(search.c_str(), FindExInfoBasic, &data, FindExSearchNameMatch, nullptr, 0);
-	if (find != INVALID_HANDLE_VALUE)
-	{
-		do
-		{
-			if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
-			{
-				continue;
-			}
-
-			std::wstring name(data.cFileName);
-			const std::wstring prefix = L"qemu-system-";
-			const std::wstring suffix = L".dll";
-			if (name.size() <= prefix.size() + suffix.size())
-			{
-				continue;
-			}
-			if (_wcsnicmp(name.c_str(), prefix.c_str(), prefix.size()) != 0)
-			{
-				continue;
-			}
-			if (_wcsicmp(name.c_str() + name.size() - suffix.size(), suffix.c_str()) != 0)
-			{
-				continue;
-			}
-
-			targets.push_back(name.substr(prefix.size(), name.size() - prefix.size() - suffix.size()));
-		} while (FindNextFileW(find, &data));
-		FindClose(find);
-	}
-
-	if (targets.empty())
-	{
-		targets.push_back(L"x86_64");
-		targets.push_back(L"i386");
-	}
-
-	std::sort(targets.begin(), targets.end(), [](const std::wstring& left, const std::wstring& right)
-	{
-		bool leftDefault = _wcsicmp(left.c_str(), L"x86_64") == 0;
-		bool rightDefault = _wcsicmp(right.c_str(), L"x86_64") == 0;
-		if (leftDefault != rightDefault)
-		{
-			return leftDefault;
-		}
-		return _wcsicmp(left.c_str(), right.c_str()) < 0;
-	});
-	targets.erase(std::unique(targets.begin(), targets.end(), [](const std::wstring& left, const std::wstring& right)
-	{
-		return _wcsicmp(left.c_str(), right.c_str()) == 0;
-	}), targets.end());
-
 	m_refreshingQemuTargets = true;
 	architectureBox->Items->Clear();
-	int selectedIndex = 0;
-	for (unsigned int i = 0; i < targets.size(); i++)
-	{
-		ComboBoxItem^ item = ref new ComboBoxItem();
-		item->Content = ref new String(targets[i].c_str());
-		architectureBox->Items->Append(item);
-		if (_wcsicmp(targets[i].c_str(), previous.c_str()) == 0)
-		{
-			selectedIndex = static_cast<int>(i);
-		}
-	}
-	architectureBox->SelectedIndex = selectedIndex;
+	ComboBoxItem^ item = ref new ComboBoxItem();
+	item->Content = ref new String(L"x86_64");
+	architectureBox->Items->Append(item);
+	architectureBox->SelectedIndex = 0;
+	architectureBox->IsEnabled = false;
 	m_refreshingQemuTargets = false;
 }
 
 std::wstring DirectXPage::SelectedQemuTarget()
 {
-	if (architectureBox == nullptr)
-	{
-		return L"x86_64";
-	}
-
-	ComboBoxItem^ selectedArch = dynamic_cast<ComboBoxItem^>(architectureBox->SelectedItem);
-	if (selectedArch == nullptr || selectedArch->Content == nullptr)
-	{
-		return L"x86_64";
-	}
-
-	std::wstring target(selectedArch->Content->ToString()->Data());
-	return target.empty() ? std::wstring(L"x86_64") : target;
+	return L"x86_64";
 }
 
 std::wstring DirectXPage::SelectedQemuDllName()
 {
-	return L"qemu-system-" + SelectedQemuTarget() + L".dll";
+	return L"qemu-system-x86_64.dll";
 }
 
 void DirectXPage::RefreshQemuOptionSelectors(bool showProgress)
@@ -2738,7 +2673,7 @@ void DirectXPage::RefreshQemuOptionSelectors(bool showProgress)
 
 			if (architectureBox != nullptr)
 			{
-				architectureBox->IsEnabled = true;
+				architectureBox->IsEnabled = false;
 			}
 			if (machineSelectorBox != nullptr) machineSelectorBox->IsEnabled = true;
 			if (cpuSelectorBox != nullptr) cpuSelectorBox->IsEnabled = true;
@@ -2908,13 +2843,13 @@ void DirectXPage::ResetToStartupDefaults()
 	{
 		extraArgumentsBox->Text = "";
 	}
-	if (architectureBox != nullptr && memorySlider != nullptr)
+	if (architectureBox != nullptr && memoryBox != nullptr)
 	{
 		ComboBoxItem^ selectedArch = dynamic_cast<ComboBoxItem^>(architectureBox->SelectedItem);
 		if (selectedArch != nullptr)
 		{
 			std::wstring target(selectedArch->Content->ToString()->Data());
-			memorySlider->Value = GetTargetProfile(target).memoryMb;
+			SelectComboBoxValue(memoryBox, std::to_wstring(GetTargetProfile(target).memoryMb));
 		}
 	}
 	RefreshQemuOptionSelectors(false);
@@ -3092,10 +3027,8 @@ void DirectXPage::StartButton_Click(Object^ sender, RoutedEventArgs^ e)
 	}
 	int diagnosticProfile = diagnosticProfileBox != nullptr ? diagnosticProfileBox->SelectedIndex : 0;
 	bool profileAllowsNoMedia = diagnosticProfile == ProfileVideoOnlyNoMedia;
-	bool shadPs4KernelBoot = IsShadPs4Target(SelectedQemuTarget()) && kernelPathBox != nullptr &&
-		kernelPathBox->Text != nullptr && kernelPathBox->Text->Length() > 0;
 	bool hasSharedFolderMedia = VvfatFeatureEnabled && m_selectedSharedFolder != nullptr;
-	if (!profileAllowsNoMedia && !shadPs4KernelBoot && m_selectedCommandFile == nullptr && m_selectedDriveFile == nullptr && m_selectedCdromFile == nullptr && !hasSharedFolderMedia)
+	if (!profileAllowsNoMedia && m_selectedCommandFile == nullptr && m_selectedDriveFile == nullptr && m_selectedCdromFile == nullptr && !hasSharedFolderMedia)
 	{
 		AppendError(L"No drive, CD-ROM, shared folder, or qemu_cmd_line file selected.");
 		tabPanel->SelectedIndex = 1;
@@ -3130,6 +3063,8 @@ void DirectXPage::StopButton_Click(Object^ sender, RoutedEventArgs^ e)
 
 	SetStatus(L"Stopping QEMU...");
 	AppendError(L"Stop: requesting QEMU stop.");
+	m_isStopPending = true;
+	UpdateVmControlButtons();
 	m_main->StopCore();
 	SetStatus(m_main->StatusText());
 }
@@ -3196,6 +3131,8 @@ void DirectXPage::ShutdownButton_Click(Object^ sender, RoutedEventArgs^ e)
 	}
 
 	AppendError(L"Shutdown: QEMU shutdown requested.");
+	m_isShutdownPending = true;
+	UpdateVmControlButtons();
 	SetStatus(L"QEMU shutdown requested.");
 }
 
@@ -3346,10 +3283,8 @@ void DirectXPage::StageBootFileAndStart()
 
 			int diagnosticProfile = diagnosticProfileBox != nullptr ? diagnosticProfileBox->SelectedIndex : 0;
 			bool profileAllowsNoMedia = diagnosticProfile == ProfileVideoOnlyNoMedia;
-			bool shadPs4KernelBoot = IsShadPs4Target(SelectedQemuTarget()) && kernelPathBox != nullptr &&
-				kernelPathBox->Text != nullptr && kernelPathBox->Text->Length() > 0;
 			bool hasSharedFolderMedia = VvfatFeatureEnabled && m_selectedSharedFolder != nullptr;
-			if (!profileAllowsNoMedia && !shadPs4KernelBoot && m_stagedDriveFile == nullptr && m_stagedCdromFile == nullptr && !hasSharedFolderMedia)
+			if (!profileAllowsNoMedia && m_stagedDriveFile == nullptr && m_stagedCdromFile == nullptr && !hasSharedFolderMedia)
 			{
 				AppendError(L"Start: no media was prepared.");
 				SetStartState(false, false);
@@ -3406,12 +3341,12 @@ void DirectXPage::ShowTabsButton_Click(Object^ sender, RoutedEventArgs^ e)
 	if (topPanel->Visibility == Windows::UI::Xaml::Visibility::Visible)
 	{
 		topPanel->Visibility = Windows::UI::Xaml::Visibility::Collapsed;
-		showTabsButton->Label = "Show tabs";
+		showTabsButton->Label = "Show settings";
 	}
 	else
 	{
 		topPanel->Visibility = Windows::UI::Xaml::Visibility::Visible;
-		showTabsButton->Label = "Hide tabs";
+		showTabsButton->Label = "Hide settings";
 	}
 }
 
@@ -3552,7 +3487,7 @@ void DirectXPage::Architecture_Changed(Object^ sender, SelectionChangedEventArgs
 	(void)sender;
 	(void)e;
 
-	if (architectureBox == nullptr || memorySlider == nullptr)
+	if (architectureBox == nullptr || memoryBox == nullptr)
 	{
 		return;
 	}
@@ -3566,7 +3501,7 @@ void DirectXPage::Architecture_Changed(Object^ sender, SelectionChangedEventArgs
 	{
 		std::wstring target(selectedArch->Content->ToString()->Data());
 		TargetProfile profile = GetTargetProfile(target);
-		memorySlider->Value = profile.memoryMb;
+		SelectComboBoxValue(memoryBox, std::to_wstring(profile.memoryMb));
 	}
 
 	RefreshQemuOptionSelectors(true);
@@ -3577,12 +3512,12 @@ void DirectXPage::DiagnosticProfile_Changed(Object^ sender, SelectionChangedEven
 {
 	(void)sender;
 	(void)e;
-	if (diagnosticProfileBox != nullptr && memorySlider != nullptr)
+	if (diagnosticProfileBox != nullptr && memoryBox != nullptr)
 	{
 		int memoryMb = ProfileDefaultMemoryMb(diagnosticProfileBox->SelectedIndex);
 		if (memoryMb > 0)
 		{
-			memorySlider->Value = memoryMb;
+			SelectComboBoxValue(memoryBox, std::to_wstring(memoryMb));
 		}
 	}
 	m_refreshingQemuSelectors = true;
@@ -3591,22 +3526,11 @@ void DirectXPage::DiagnosticProfile_Changed(Object^ sender, SelectionChangedEven
 	RefreshCommandLinePreview();
 }
 
-void DirectXPage::MemorySlider_ValueChanged(Object^ sender, RangeBaseValueChangedEventArgs^ e)
+void DirectXPage::MemoryBox_SelectionChanged(Object^ sender, SelectionChangedEventArgs^ e)
 {
-	int memoryMb = static_cast<int>(e->NewValue + 0.5);
-	if (memoryValueText != nullptr)
-	{
-		if (memoryMb <= 0)
-		{
-			memoryValueText->Text = "Default";
-		}
-		else
-		{
-			std::wstring text = std::to_wstring(memoryMb);
-			text += L" MB";
-			memoryValueText->Text = ref new String(text.c_str());
-		}
-	}
+	(void)sender;
+	(void)e;
+	if (m_refreshingQemuSelectors) return;
 	RefreshCommandLinePreview();
 }
 
@@ -3732,8 +3656,105 @@ void DirectXPage::OnSwapChainPanelSizeChanged(Object^ sender, SizeChangedEventAr
 	m_main->CreateWindowSizeDependentResources();
 }
 
+void DirectXPage::MetricsTimer_Tick(Object^ sender, Object^ e)
+{
+	(void)sender;
+	(void)e;
+	UpdatePerformanceMetrics();
+}
+
+void DirectXPage::ResetPerformanceMetrics()
+{
+	m_metricsStartTick = GetTickCount64();
+	m_metricsLastSampleTick = m_metricsStartTick;
+	m_metricsLastCpuTime100ns = 0;
+	m_metricsLastFrameCount = m_main != nullptr ? m_main->VideoFrameCount() : 0;
+	m_metricsBootComplete = false;
+	if (bootMetricText != nullptr) bootMetricText->Text = "Measuring...";
+	if (ramMetricText != nullptr) ramMetricText->Text = "-- MB";
+	if (fpsMetricText != nullptr) fpsMetricText->Text = "0.0";
+	if (cpuMetricText != nullptr) cpuMetricText->Text = "0.0%";
+	if (metricsOverlay != nullptr) metricsOverlay->Visibility = Windows::UI::Xaml::Visibility::Visible;
+	if (m_metricsTimer != nullptr) m_metricsTimer->Start();
+}
+
+void DirectXPage::UpdatePerformanceMetrics()
+{
+	if ((!m_isStarting && !m_isRunning) || m_main == nullptr)
+	{
+		return;
+	}
+
+	uint64_t now = GetTickCount64();
+	uint64_t elapsedMs = now >= m_metricsLastSampleTick ? now - m_metricsLastSampleTick : 0;
+	unsigned int frameCount = m_main->VideoFrameCount();
+	unsigned int frameDelta = frameCount >= m_metricsLastFrameCount
+		? frameCount - m_metricsLastFrameCount
+		: frameCount;
+	if (elapsedMs > 0 && fpsMetricText != nullptr)
+	{
+		double fps = static_cast<double>(frameDelta) * 1000.0 / static_cast<double>(elapsedMs);
+		std::wstringstream fpsText;
+		fpsText << std::fixed << std::setprecision(1) << fps;
+		fpsMetricText->Text = ref new String(fpsText.str().c_str());
+	}
+	m_metricsLastFrameCount = frameCount;
+	m_metricsLastSampleTick = now;
+
+	uint64_t firstFrameTick = m_main->FirstVideoFrameTick();
+	if (!m_metricsBootComplete && firstFrameTick >= m_metricsStartTick && firstFrameTick != 0)
+	{
+		double bootSeconds = static_cast<double>(firstFrameTick - m_metricsStartTick) / 1000.0;
+		std::wstringstream bootText;
+		bootText << std::fixed << std::setprecision(2) << bootSeconds << L" s";
+		if (bootMetricText != nullptr) bootMetricText->Text = ref new String(bootText.str().c_str());
+		m_metricsBootComplete = true;
+	}
+	else if (!m_metricsBootComplete && bootMetricText != nullptr)
+	{
+		double waitingSeconds = static_cast<double>(now - m_metricsStartTick) / 1000.0;
+		std::wstringstream waitingText;
+		waitingText << std::fixed << std::setprecision(1) << waitingSeconds << L" s...";
+		bootMetricText->Text = ref new String(waitingText.str().c_str());
+	}
+
+	try
+	{
+		ProcessDiagnosticInfo^ processInfo = ProcessDiagnosticInfo::GetForCurrentProcess();
+		ProcessMemoryUsageReport^ memoryReport = processInfo->MemoryUsage->GetReport();
+		double memoryMb = static_cast<double>(memoryReport->WorkingSetSizeInBytes) / (1024.0 * 1024.0);
+		std::wstringstream memoryText;
+		memoryText << std::fixed << std::setprecision(1) << memoryMb << L" MB";
+		if (ramMetricText != nullptr) ramMetricText->Text = ref new String(memoryText.str().c_str());
+
+		ProcessCpuUsageReport^ cpuReport = processInfo->CpuUsage->GetReport();
+		uint64_t cpuTime100ns = static_cast<uint64_t>(cpuReport->KernelTime.Duration + cpuReport->UserTime.Duration);
+		if (m_metricsLastCpuTime100ns != 0 && elapsedMs > 0 && cpuTime100ns >= m_metricsLastCpuTime100ns)
+		{
+			unsigned int processorCount = (std::max)(1u, std::thread::hardware_concurrency());
+			double cpuPercent = static_cast<double>(cpuTime100ns - m_metricsLastCpuTime100ns) /
+				(static_cast<double>(elapsedMs) * 10000.0 * static_cast<double>(processorCount)) * 100.0;
+			cpuPercent = (std::max)(0.0, (std::min)(100.0, cpuPercent));
+			std::wstringstream cpuText;
+			cpuText << std::fixed << std::setprecision(1) << cpuPercent << L"%";
+			if (cpuMetricText != nullptr) cpuMetricText->Text = ref new String(cpuText.str().c_str());
+		}
+		m_metricsLastCpuTime100ns = cpuTime100ns;
+	}
+	catch (Exception^)
+	{
+		if (ramMetricText != nullptr) ramMetricText->Text = "Unavailable";
+		if (cpuMetricText != nullptr) cpuMetricText->Text = "Unavailable";
+	}
+}
+
 void DirectXPage::SetStartState(bool starting, bool running)
 {
+	bool startingNewRun = starting && !m_isStarting && !m_isRunning;
+	if (startingNewRun)
+	{
+		ResetPerformanceMetrics();
+	}
 	m_isStarting = starting;
 	m_isRunning = running;
 	if (running)
@@ -3748,12 +3769,21 @@ void DirectXPage::SetStartState(bool starting, bool running)
 	if (!running)
 	{
 		m_isPaused = false;
+		m_isShutdownPending = false;
+		m_isStopPending = false;
 		m_virtualKeyboardVisible = false;
 		ReleaseGamepadGuestKeys();
 	}
 	if (!starting && !running)
 	{
 		StopRfbProxyServer();
+		if (m_metricsTimer != nullptr) m_metricsTimer->Stop();
+		if (metricsOverlay != nullptr) metricsOverlay->Visibility = Windows::UI::Xaml::Visibility::Collapsed;
+	}
+	else
+	{
+		if (m_metricsTimer != nullptr) m_metricsTimer->Start();
+		if (metricsOverlay != nullptr) metricsOverlay->Visibility = Windows::UI::Xaml::Visibility::Visible;
 	}
 	if (startButton != nullptr)
 	{
@@ -3780,21 +3810,23 @@ void DirectXPage::SetStartState(bool starting, bool running)
 
 void DirectXPage::UpdateVmControlButtons()
 {
+	const bool canControl = m_isRunning && !m_isStopPending;
+	const bool canChangeRunState = canControl && !m_isShutdownPending;
 	if (pauseButton != nullptr)
 	{
-		pauseButton->IsEnabled = false;
+		pauseButton->IsEnabled = canChangeRunState && !m_isPaused;
 	}
 	if (resumeButton != nullptr)
 	{
-		resumeButton->IsEnabled = false;
+		resumeButton->IsEnabled = canChangeRunState && m_isPaused;
 	}
 	if (stopButton != nullptr)
 	{
-		stopButton->IsEnabled = false;
+		stopButton->IsEnabled = m_isRunning && !m_isStopPending;
 	}
 	if (shutdownButton != nullptr)
 	{
-		shutdownButton->IsEnabled = false;
+		shutdownButton->IsEnabled = canControl && !m_isShutdownPending;
 	}
 }
 
@@ -4511,27 +4543,6 @@ bool DirectXPage::ValidateStartConfiguration(std::wstring& report)
 		}
 	}
 
-	if (IsShadPs4Target(target))
-	{
-		std::wstring kernel = kernelPathBox != nullptr && kernelPathBox->Text != nullptr ? kernelPathBox->Text->Data() : L"";
-		std::wstring titleId = shadps4TitleIdBox != nullptr && shadps4TitleIdBox->Text != nullptr ? shadps4TitleIdBox->Text->Data() : L"";
-		if (kernel.empty())
-		{
-			report = L"ShadPS4 requires the title eboot.bin/ELF in Manual kernel path or the Kernel selector.";
-			return false;
-		}
-		if (!IsShadPs4TitleId(titleId))
-		{
-			report = L"ShadPS4 requires a Title ID with 1-32 uppercase letters, digits, underscores, or hyphens (for example CUSA02456).";
-			return false;
-		}
-		if (RfbServerEnabled())
-		{
-			report = L"ShadPS4 supports only -display host or -display none; disable the RFB server.";
-			return false;
-		}
-	}
-
 	std::vector<std::wstring> directBootPaths;
 	for (TextBox^ box : { firmwarePathBox, kernelPathBox, initrdPathBox, dtbPathBox })
 	{
@@ -4684,7 +4695,8 @@ void DirectXPage::StopAllMediaNbdServers()
 
 bool DirectXPage::RfbServerEnabled()
 {
-	return SelectedComboTag(rfbServerBox) == L"on";
+	/* Xbox/UWP uses the local in-process Direct3D host display exclusively. */
+	return false;
 }
 
 int DirectXPage::RfbExternalPort()
@@ -5164,34 +5176,24 @@ std::wstring DirectXPage::BuildAutomaticCommandLine()
 	std::wstring dtbPath = dtbPathBox != nullptr && dtbPathBox->Text != nullptr ? std::wstring(dtbPathBox->Text->Data()) : std::wstring();
 	std::wstring kernelAppend = kernelAppendBox != nullptr && kernelAppendBox->Text != nullptr ? std::wstring(kernelAppendBox->Text->Data()) : std::wstring();
 
-	int memoryMb = static_cast<int>(memorySlider->Value + 0.5);
+	std::wstring memoryValue = SelectedComboTag(memoryBox);
+	int memoryMb = memoryValue.empty() ? 512 : static_cast<int>(std::wcstol(memoryValue.c_str(), nullptr, 10));
 
 	StorageFile^ driveFile = m_stagedDriveFile != nullptr ? m_stagedDriveFile : m_selectedDriveFile;
 	StorageFile^ cdromFile = m_stagedCdromFile != nullptr ? m_stagedCdromFile : m_selectedCdromFile;
-	std::wstring command = L"qemu-system-";
-	command += target;
-	if (IsShadPs4Target(target))
-	{
-		std::wstring titleId = shadps4TitleIdBox != nullptr && shadps4TitleIdBox->Text != nullptr ? shadps4TitleIdBox->Text->Data() : L"";
-		std::wstring variant = SelectedComboTag(shadps4VariantBox);
-		if (variant != L"neo")
-		{
-			variant = L"base";
-		}
-		command += L" -M shadps4,variant=";
-		command += variant;
-		command += L",execute=on,title-id=";
-		command += titleId;
-		command += L" -accel tcg,thread=single -smp 8 -m 5248M -display host";
-		command += L" -audiodev xaudio2,id=shadps4 -nodefaults";
-		if (!kernelPath.empty())
-		{
-			command += L" -kernel ";
-			command += QuoteForCommandLine(ref new String(kernelPath.c_str()))->Data();
-		}
-		return command;
-	}
+	std::wstring command = L"qemu-system-x86_64";
 	int diagnosticProfile = diagnosticProfileBox != nullptr ? diagnosticProfileBox->SelectedIndex : 0;
+	int tcgTbSizeMb = 128;
+	if (diagnosticProfile == ProfileXboxTcg64)
+	{
+		tcgTbSizeMb = 64;
+	}
+	else if (diagnosticProfile == ProfileXboxTcg256)
+	{
+		tcgTbSizeMb = 256;
+	}
+	command += L" -accel tcg,thread=multi,tb-size=";
+	command += std::to_wstring(tcgTbSizeMb);
 	std::wstring qemuDir(Package::Current->InstalledLocation->Path->Data());
 	qemuDir += L"\\qemu";
 	command += L" -L ";
@@ -5278,7 +5280,7 @@ std::wstring DirectXPage::BuildAutomaticCommandLine()
 	std::wstring selectorValue = SelectedComboTag(smpSelectorBox);
 	if (selectorValue.empty())
 	{
-		selectorValue = L"1";
+		selectorValue = L"2";
 	}
 	command += L" -smp ";
 	command += selectorValue;
@@ -5639,15 +5641,6 @@ String^ DirectXPage::BuildCommandLine()
 {
 	std::wstring command = BuildAutomaticCommandLine();
 	std::wstring additional = BuildAdditionalArguments();
-	if (IsShadPs4Target(SelectedQemuTarget()))
-	{
-		if (!additional.empty())
-		{
-			command += L" ";
-			command += additional;
-		}
-		return ref new String(command.c_str());
-	}
 	std::vector<std::wstring> automaticTokens = TokenizeCommandLine(command);
 	std::vector<std::wstring> additionalTokens = TokenizeCommandLine(additional);
 	if (!CommandHasOption(automaticTokens, L"-monitor") && !CommandHasOption(additionalTokens, L"-monitor"))
@@ -5794,7 +5787,7 @@ void DirectXPage::StartWithCommandFile(StorageFile^ commandFile)
 				AppendError(m_main->ApiCompatibilityText());
 				SetStatus(m_main->StatusText());
 				topPanel->Visibility = Windows::UI::Xaml::Visibility::Collapsed;
-				showTabsButton->Label = "Show tabs";
+				showTabsButton->Label = "Show settings";
 				bottomAppBar->IsOpen = false;
 				SetStartState(false, true);
 			}));

@@ -168,6 +168,16 @@ bool Qemu_UWP_hostMain::HasVideoFrame() const
 	return m_host.HasVideoFrame();
 }
 
+unsigned Qemu_UWP_hostMain::VideoFrameCount() const
+{
+	return m_host.VideoFrameCount();
+}
+
+uint64_t Qemu_UWP_hostMain::FirstVideoFrameTick() const
+{
+	return m_host.FirstVideoFrameTick();
+}
+
 void Qemu_UWP_hostMain::TrackingUpdate(float positionX, float positionY)
 {
 	m_host.SetPointer(positionX, positionY, (std::max)(1.0f, positionX), (std::max)(1.0f, positionY), 0, 0, false, false, false);

@@ -47,9 +47,11 @@ QemuDirectHost::QemuDirectHost() :
 	m_qemuHostRun(nullptr),
 	m_qemuHostStart(nullptr),
 	m_qemuHostMainLoopStep(nullptr),
+	m_qemuHostWakeMainLoop(nullptr),
 	m_qemuHostPause(nullptr),
 	m_qemuHostResume(nullptr),
 	m_qemuHostRequestShutdown(nullptr),
+	m_qemuHostRequestStop(nullptr),
 	m_qemuHostReset(nullptr),
 	m_qemuHostJoin(nullptr),
 	m_qemuHostCleanup(nullptr),
@@ -65,6 +67,7 @@ QemuDirectHost::QemuDirectHost() :
 	m_qemuHostSetAudioCallback(nullptr),
 	m_qemuHostRegisterLogCallback(nullptr),
 	m_qemuHostRegisterVideoCallback(nullptr),
+	m_qemuHostRegisterVideoUpdateCallback(nullptr),
 	m_qemuHostRegisterAudioCallback(nullptr),
 	m_qemuHostSetInputCallback(nullptr),
 	m_qemuHostIsInitialized(nullptr),
@@ -78,6 +81,11 @@ QemuDirectHost::QemuDirectHost() :
 	m_frameWidth(0),
 	m_frameHeight(0),
 	m_videoFrameCount(0),
+	m_dirtyX(0),
+	m_dirtyY(0),
+	m_dirtyWidth(0),
+	m_dirtyHeight(0),
+	m_firstVideoFrameTick(0),
 	m_frameValid(false),
 	m_frameDirty(false),
 	m_mouseLeft(false),
@@ -92,6 +100,7 @@ QemuDirectHost::QemuDirectHost() :
 	m_running(false),
 	m_pendingPause(false),
 	m_pendingResume(false),
+	m_pendingReset(false),
 	m_pendingShutdown(false),
 	m_pendingStop(false)
 {
@@ -187,6 +196,7 @@ bool QemuDirectHost::LoadGame(StorageFile^ commandFile, std::wstring* error)
 		std::lock_guard<std::mutex> lock(m_controlMutex);
 		m_pendingPause = false;
 		m_pendingResume = false;
+		m_pendingReset = false;
 		m_pendingShutdown = false;
 		m_pendingStop = false;
 	}
@@ -196,6 +206,11 @@ bool QemuDirectHost::LoadGame(StorageFile^ commandFile, std::wstring* error)
 		m_frameWidth = 0;
 		m_frameHeight = 0;
 		m_videoFrameCount = 0;
+		m_dirtyX = 0;
+		m_dirtyY = 0;
+		m_dirtyWidth = 0;
+		m_dirtyHeight = 0;
+		m_firstVideoFrameTick = 0;
 		m_frameValid = false;
 		m_frameDirty = false;
 	}
@@ -221,7 +236,11 @@ bool QemuDirectHost::LoadGame(StorageFile^ commandFile, std::wstring* error)
 	{
 		m_qemuHostSetLogCallback(&QemuDirectHost::LogCallback, this);
 	}
-	if (m_qemuHostRegisterVideoCallback != nullptr)
+	if (m_qemuHostRegisterVideoUpdateCallback != nullptr)
+	{
+		m_qemuHostRegisterVideoUpdateCallback(&QemuDirectHost::VideoUpdateCallbackV3, this);
+	}
+	else if (m_qemuHostRegisterVideoCallback != nullptr)
 	{
 		m_qemuHostRegisterVideoCallback(&QemuDirectHost::VideoCallbackV2, this);
 	}
@@ -294,9 +313,9 @@ void QemuDirectHost::Stop()
 	{
 		{
 			std::lock_guard<std::mutex> lock(m_controlMutex);
-			m_pendingShutdown = true;
-			m_pendingStop = true;
+		m_pendingStop = true;
 		}
+		WakeMainLoop();
 		Trace(L"DirectHost: QEMU stop queued.");
 		SetStatus(L"QEMU stop requested.");
 	}
@@ -347,6 +366,7 @@ bool QemuDirectHost::Pause(std::wstring* error)
 		m_pendingPause = true;
 		m_pendingResume = false;
 	}
+	WakeMainLoop();
 	Trace(L"DirectHost: QEMU pause queued.");
 	SetStatus(L"QEMU pause requested.");
 	return true;
@@ -376,6 +396,7 @@ bool QemuDirectHost::Resume(std::wstring* error)
 		m_pendingResume = true;
 		m_pendingPause = false;
 	}
+	WakeMainLoop();
 	Trace(L"DirectHost: QEMU resume queued.");
 	SetStatus(L"QEMU resume requested.");
 	return true;
@@ -404,6 +425,7 @@ bool QemuDirectHost::RequestShutdown(std::wstring* error)
 		std::lock_guard<std::mutex> lock(m_controlMutex);
 		m_pendingShutdown = true;
 	}
+	WakeMainLoop();
 	Trace(L"DirectHost: QEMU shutdown queued.");
 	SetStatus(L"QEMU shutdown requested.");
 	return true;
@@ -413,8 +435,12 @@ void QemuDirectHost::Reset()
 {
 	if (m_initialized && m_qemuHostReset != nullptr)
 	{
-		Trace(L"DirectHost: calling qemu_host_reset.");
-		m_qemuHostReset();
+		{
+			std::lock_guard<std::mutex> lock(m_controlMutex);
+			m_pendingReset = true;
+		}
+		WakeMainLoop();
+		Trace(L"DirectHost: QEMU reset queued.");
 	}
 }
 
@@ -436,6 +462,18 @@ bool QemuDirectHost::HasVideoFrame() const
 	return m_videoFrameCount > 0;
 }
 
+unsigned QemuDirectHost::VideoFrameCount() const
+{
+	std::lock_guard<std::mutex> lock(m_frameMutex);
+	return m_videoFrameCount;
+}
+
+uint64_t QemuDirectHost::FirstVideoFrameTick() const
+{
+	std::lock_guard<std::mutex> lock(m_frameMutex);
+	return m_firstVideoFrameTick;
+}
+
 QemuHostFrameSnapshot QemuDirectHost::CopyFrame(bool forcePixels)
 {
 	std::lock_guard<std::mutex> lock(m_frameMutex);
@@ -447,8 +485,26 @@ QemuHostFrameSnapshot QemuDirectHost::CopyFrame(bool forcePixels)
 	frame.dirty = m_frameDirty || forcePixels;
 	if (frame.valid && frame.dirty)
 	{
-		frame.pixels = m_framePixels;
+		frame.dirtyX = forcePixels ? 0 : m_dirtyX;
+		frame.dirtyY = forcePixels ? 0 : m_dirtyY;
+		frame.dirtyWidth = forcePixels ? m_frameWidth : m_dirtyWidth;
+		frame.dirtyHeight = forcePixels ? m_frameHeight : m_dirtyHeight;
+		if (frame.dirtyWidth > 0 && frame.dirtyHeight > 0)
+		{
+			frame.pixels.resize(static_cast<size_t>(frame.dirtyWidth) * frame.dirtyHeight);
+			for (unsigned row = 0; row < frame.dirtyHeight; row++)
+			{
+				const uint32_t* source = m_framePixels.data() +
+					static_cast<size_t>(frame.dirtyY + row) * m_frameWidth + frame.dirtyX;
+				uint32_t* target = frame.pixels.data() + static_cast<size_t>(row) * frame.dirtyWidth;
+				std::copy_n(source, frame.dirtyWidth, target);
+			}
+		}
 		m_frameDirty = false;
+		m_dirtyX = 0;
+		m_dirtyY = 0;
+		m_dirtyWidth = 0;
+		m_dirtyHeight = 0;
 	}
 	return frame;
 }
@@ -469,6 +525,7 @@ void QemuDirectHost::SetKey(unsigned key, bool down)
 			m_pendingInputEvents.push_back({ PendingInputType::KeyNumber, keyNumber, 0, 0, 0, down });
 		}
 	}
+	WakeMainLoop();
 }
 
 void QemuDirectHost::SetPointer(float x, float y, float pointerWidth, float pointerHeight, int deltaX, int deltaY, bool left, bool right, bool middle)
@@ -552,6 +609,7 @@ void QemuDirectHost::SetPointer(float x, float y, float pointerWidth, float poin
 			m_mouseRight = right;
 		}
 	}
+	WakeMainLoop();
 }
 
 void QemuDirectHost::ClearPointer()
@@ -575,6 +633,7 @@ void QemuDirectHost::ClearPointer()
 	m_mouseLeft = false;
 	m_mouseMiddle = false;
 	m_mouseRight = false;
+	WakeMainLoop();
 }
 
 void QemuDirectHost::ClearInput()
@@ -675,6 +734,15 @@ bool QemuDirectHost::LoadQemuDll(const std::wstring& dllName, std::wstring* erro
 	{
 		Trace(L"DirectHost: qemu_host_resume export not found.");
 	}
+	m_qemuHostRequestStop = reinterpret_cast<qemu_host_request_stop_t>(GetProcAddress(m_module, "qemu_host_request_stop"));
+	if (m_qemuHostRequestStop != nullptr)
+	{
+		Trace(L"DirectHost: found force-stop lifecycle export.");
+	}
+	else
+	{
+		Trace(L"DirectHost: force-stop export not found; Stop will use shutdown fallback.");
+	}
 	m_qemuHostSendPointerAbsNormalized = reinterpret_cast<qemu_host_send_pointer_abs_normalized_t>(GetProcAddress(m_module, "qemu_host_send_pointer_abs_normalized"));
 	if (m_qemuHostSendPointerAbsNormalized != nullptr)
 	{
@@ -740,25 +808,34 @@ bool QemuDirectHost::LoadQemuDll(const std::wstring& dllName, std::wstring* erro
 		}
 	}
 
-	m_qemuHostRegisterVideoCallback = reinterpret_cast<qemu_host_register_video_callback_t>(GetProcAddress(m_module, "qemu_host_register_video_callback"));
-	if (m_qemuHostRegisterVideoCallback != nullptr)
+	m_qemuHostRegisterVideoUpdateCallback = reinterpret_cast<qemu_host_register_video_update_callback_t>(
+		GetProcAddress(m_module, "qemu_host_register_video_update_callback"));
+	if (m_qemuHostRegisterVideoUpdateCallback != nullptr)
 	{
-		Trace(L"DirectHost: found QEMU v2 video callback registration export.");
+		Trace(L"DirectHost: found dirty-rectangle video callback registration export.");
 	}
 	else
 	{
-		m_qemuHostSetVideoCallback = reinterpret_cast<qemu_host_set_video_callback_t>(GetProcAddress(m_module, "qemu_host_set_video_callback"));
-		if (m_qemuHostSetVideoCallback != nullptr)
+		m_qemuHostRegisterVideoCallback = reinterpret_cast<qemu_host_register_video_callback_t>(GetProcAddress(m_module, "qemu_host_register_video_callback"));
+		if (m_qemuHostRegisterVideoCallback != nullptr)
 		{
-			Trace(L"DirectHost: found legacy QEMU video callback registration export.");
+			Trace(L"DirectHost: found QEMU v2 video callback registration export.");
 		}
 		else
 		{
-			if (error)
+			m_qemuHostSetVideoCallback = reinterpret_cast<qemu_host_set_video_callback_t>(GetProcAddress(m_module, "qemu_host_set_video_callback"));
+			if (m_qemuHostSetVideoCallback != nullptr)
 			{
-				*error = L"Missing QEMU host video callback registration export.";
+				Trace(L"DirectHost: found legacy QEMU video callback registration export.");
 			}
-			return false;
+			else
+			{
+				if (error)
+				{
+					*error = L"Missing QEMU host video callback registration export.";
+				}
+				return false;
+			}
 		}
 	}
 
@@ -790,6 +867,15 @@ bool QemuDirectHost::LoadQemuDll(const std::wstring& dllName, std::wstring* erro
 		Trace(L"DirectHost: optional qemu_host_set_input_callback export not found.");
 	}
 
+	m_qemuHostWakeMainLoop = reinterpret_cast<qemu_host_wake_main_loop_t>(GetProcAddress(m_module, "qemu_host_wake_main_loop"));
+	if (m_qemuHostWakeMainLoop != nullptr)
+	{
+		Trace(L"DirectHost: blocking main-loop wake export found; busy polling disabled.");
+	}
+	else
+	{
+		Trace(L"DirectHost: main-loop wake export not found; using legacy nonblocking loop.");
+	}
 	return Resolve("qemu_host_init", m_qemuHostInit, error) &&
 		Resolve("qemu_host_start", m_qemuHostStart, error) &&
 		Resolve("qemu_host_main_loop_step", m_qemuHostMainLoopStep, error) &&
@@ -833,7 +919,9 @@ bool QemuDirectHost::Resolve(const char* name, T& target, std::wstring* error)
 
 void QemuDirectHost::RunQemu()
 {
-	Trace(L"DirectHost: entering qemu_host_main_loop_step loop.");
+	const bool blockingLoop = m_qemuHostWakeMainLoop != nullptr;
+	Trace(blockingLoop ? L"DirectHost: entering blocking qemu_host_main_loop_step loop."
+		: L"DirectHost: entering legacy nonblocking qemu_host_main_loop_step loop.");
 	m_loopStartTick = GetTickCount64();
 	int result = 0;
 	int status = 0;
@@ -842,7 +930,7 @@ void QemuDirectHost::RunQemu()
 	{
 		ProcessPendingControl();
 		ProcessPendingInput();
-		result = m_qemuHostMainLoopStep(true, &status);
+		result = m_qemuHostMainLoopStep(!blockingLoop, &status);
 		stepCount++;
 		if (result < 0)
 		{
@@ -854,11 +942,11 @@ void QemuDirectHost::RunQemu()
 			Trace(L"DirectHost: qemu_host_main_loop_step completed with status " + std::to_wstring(status));
 			break;
 		}
-		if ((stepCount & 0xff) == 0)
+		if (!blockingLoop && (stepCount & 0xff) == 0)
 		{
 			Sleep(0);
 		}
-		if ((stepCount & 0xfff) == 0)
+		if (!blockingLoop && (stepCount & 0xfff) == 0)
 		{
 			Sleep(1);
 		}
@@ -877,20 +965,31 @@ void QemuDirectHost::RunQemu()
 	SetStatus(L"QEMU stopped with code " + std::to_wstring(result) + L", status=" + std::to_wstring(status));
 }
 
+void QemuDirectHost::WakeMainLoop()
+{
+	if (m_qemuHostWakeMainLoop != nullptr && m_running)
+	{
+		m_qemuHostWakeMainLoop();
+	}
+}
+
 void QemuDirectHost::ProcessPendingControl()
 {
 	bool pause = false;
 	bool resume = false;
+	bool reset = false;
 	bool shutdown = false;
 	bool stop = false;
 	{
 		std::lock_guard<std::mutex> lock(m_controlMutex);
 		pause = m_pendingPause;
 		resume = m_pendingResume;
+		reset = m_pendingReset;
 		shutdown = m_pendingShutdown;
 		stop = m_pendingStop;
 		m_pendingPause = false;
 		m_pendingResume = false;
+		m_pendingReset = false;
 		m_pendingShutdown = false;
 		m_pendingStop = false;
 	}
@@ -924,8 +1023,33 @@ void QemuDirectHost::ProcessPendingControl()
 			SetStatus(L"qemu_host_resume failed with code " + std::to_wstring(result) + L".");
 		}
 	}
+	if (reset && m_initialized && m_qemuHostReset != nullptr)
+	{
+		int result = m_qemuHostReset();
+		if (result != 0)
+		{
+			Trace(L"DirectHost: qemu_host_reset failed with code " + std::to_wstring(result));
+		}
+	}
 
-	if (shutdown && m_initialized && m_qemuHostRequestShutdown != nullptr)
+	if (stop && m_initialized)
+	{
+		Trace(L"DirectHost: processing queued QEMU stop.");
+		int result = m_qemuHostRequestStop != nullptr
+			? m_qemuHostRequestStop()
+			: m_qemuHostRequestShutdown();
+		Trace(L"DirectHost: QEMU stop request returned " + std::to_wstring(result) + L".");
+		if (result != 0)
+		{
+			SetStatus(L"QEMU stop failed with code " + std::to_wstring(result) + L".");
+		}
+		else
+		{
+			SetStatus(L"QEMU stop requested.");
+		}
+	}
+
+	if (shutdown && !stop && m_initialized && m_qemuHostRequestShutdown != nullptr)
 	{
 		Trace(L"DirectHost: processing queued QEMU shutdown.");
 		int result = m_qemuHostRequestShutdown();
@@ -936,14 +1060,8 @@ void QemuDirectHost::ProcessPendingControl()
 		}
 		else
 		{
-			SetStatus(stop ? L"QEMU stop requested." : L"QEMU shutdown requested.");
+			SetStatus(L"QEMU shutdown requested.");
 		}
-	}
-
-	if (stop)
-	{
-		Trace(L"DirectHost: processing queued QEMU stop.");
-		m_running = false;
 	}
 }
 
@@ -1353,24 +1471,49 @@ void QemuDirectHost::LogCallback(QemuHostLogLevel level, const char* message, vo
 	host->Trace(std::wstring(L"QEMU ") + prefix + L": " + Widen(message));
 }
 
-void QemuDirectHost::VideoCallback(const void* pixels, int width, int height, int stride, int format, void* opaque)
+void QemuDirectHost::ProcessVideoUpdate(QemuDirectHost* host, const void* pixels,
+	int width, int height, int stride, int format,
+	int dirtyX, int dirtyY, int updateWidth, int updateHeight)
 {
-	QemuDirectHost* host = reinterpret_cast<QemuDirectHost*>(opaque);
 	if (host == nullptr || pixels == nullptr || width <= 0 || height <= 0 || stride <= 0)
 	{
 		return;
 	}
 
-	std::vector<uint32_t> converted(static_cast<size_t>(width) * static_cast<size_t>(height));
+	int64_t right = (std::min<int64_t>)(width, static_cast<int64_t>(dirtyX) + updateWidth);
+	int64_t bottom = (std::min<int64_t>)(height, static_cast<int64_t>(dirtyY) + updateHeight);
+	dirtyX = (std::max)(0, dirtyX);
+	dirtyY = (std::max)(0, dirtyY);
+	updateWidth = static_cast<int>(right) - dirtyX;
+	updateHeight = static_cast<int>(bottom) - dirtyY;
+	if (updateWidth <= 0 || updateHeight <= 0)
+	{
+		return;
+	}
+
+	{
+		std::lock_guard<std::mutex> lock(host->m_frameMutex);
+		if (!host->m_frameValid || host->m_frameWidth != static_cast<unsigned>(width) ||
+			host->m_frameHeight != static_cast<unsigned>(height))
+		{
+			dirtyX = 0;
+			dirtyY = 0;
+			updateWidth = width;
+			updateHeight = height;
+		}
+	}
+
+	std::vector<uint32_t> converted(static_cast<size_t>(updateWidth) * updateHeight);
 	if (format >= 1 && format <= 4)
 	{
-		for (int y = 0; y < height; y++)
+		for (int row = 0; row < updateHeight; row++)
 		{
-			const uint8_t* source = reinterpret_cast<const uint8_t*>(pixels) + static_cast<size_t>(y) * stride;
-			uint32_t* target = converted.data() + static_cast<size_t>(y) * width;
-			for (int x = 0; x < width; x++)
+			const uint8_t* source = reinterpret_cast<const uint8_t*>(pixels) +
+				static_cast<size_t>(dirtyY + row) * stride;
+			uint32_t* target = converted.data() + static_cast<size_t>(row) * updateWidth;
+			for (int column = 0; column < updateWidth; column++)
 			{
-				const uint8_t* value = source + static_cast<size_t>(x) * 4;
+				const uint8_t* value = source + static_cast<size_t>(dirtyX + column) * 4;
 				uint32_t r = 0;
 				uint32_t g = 0;
 				uint32_t b = 0;
@@ -1386,61 +1529,62 @@ void QemuDirectHost::VideoCallback(const void* pixels, int width, int height, in
 					g = value[1];
 					b = value[2];
 				}
-				target[x] = PackBgra(r, g, b);
+				target[column] = PackBgra(r, g, b);
 			}
 		}
 	}
 	else
 	{
-	int bitsPerPixel = (format >> 24) & 0xff;
-	int formatType = (format >> 16) & 0xff;
-	int redBits = (format >> 8) & 0xf;
-	int greenBits = (format >> 4) & 0xf;
-	int blueBits = format & 0xf;
-	bool reversedRgb = formatType == 3 || formatType == 8 || formatType == 9;
-	if (bitsPerPixel == 32)
-	{
-		for (int y = 0; y < height; y++)
+		int bitsPerPixel = (format >> 24) & 0xff;
+		int formatType = (format >> 16) & 0xff;
+		int redBits = (format >> 8) & 0xf;
+		int greenBits = (format >> 4) & 0xf;
+		int blueBits = format & 0xf;
+		bool reversedRgb = formatType == 3 || formatType == 8 || formatType == 9;
+		if (bitsPerPixel == 32)
+		{
+		for (int row = 0; row < updateHeight; row++)
 		{
 			const uint32_t* source = reinterpret_cast<const uint32_t*>(
-				reinterpret_cast<const uint8_t*>(pixels) + static_cast<size_t>(y) * stride);
-			uint32_t* target = converted.data() + static_cast<size_t>(y) * width;
-			for (int x = 0; x < width; x++)
+				reinterpret_cast<const uint8_t*>(pixels) + static_cast<size_t>(dirtyY + row) * stride);
+			uint32_t* target = converted.data() + static_cast<size_t>(row) * updateWidth;
+			for (int column = 0; column < updateWidth; column++)
 			{
-				uint32_t value = source[x];
+				uint32_t value = source[dirtyX + column];
 				uint32_t r = reversedRgb ? (value & 0xffu) : ((value >> 16) & 0xffu);
 				uint32_t g = (value >> 8) & 0xffu;
 				uint32_t b = reversedRgb ? ((value >> 16) & 0xffu) : (value & 0xffu);
-				target[x] = PackBgra(r, g, b);
+				target[column] = PackBgra(r, g, b);
 			}
 		}
-	}
-	else if (bitsPerPixel == 24)
-	{
-		for (int y = 0; y < height; y++)
+		}
+		else if (bitsPerPixel == 24)
 		{
-			const uint8_t* source = reinterpret_cast<const uint8_t*>(pixels) + static_cast<size_t>(y) * stride;
-			uint32_t* target = converted.data() + static_cast<size_t>(y) * width;
-			for (int x = 0; x < width; x++)
+		for (int row = 0; row < updateHeight; row++)
+		{
+			const uint8_t* source = reinterpret_cast<const uint8_t*>(pixels) +
+				static_cast<size_t>(dirtyY + row) * stride;
+			uint32_t* target = converted.data() + static_cast<size_t>(row) * updateWidth;
+			for (int column = 0; column < updateWidth; column++)
 			{
-				const uint8_t* value = source + static_cast<size_t>(x) * 3;
+				const uint8_t* value = source + static_cast<size_t>(dirtyX + column) * 3;
 				uint32_t r = reversedRgb ? value[0] : value[2];
 				uint32_t g = value[1];
 				uint32_t b = reversedRgb ? value[2] : value[0];
-				target[x] = PackBgra(r, g, b);
+				target[column] = PackBgra(r, g, b);
 			}
 		}
-	}
-	else if (bitsPerPixel == 16 || bitsPerPixel == 15)
-	{
-		for (int y = 0; y < height; y++)
+		}
+		else if (bitsPerPixel == 16 || bitsPerPixel == 15)
+		{
+		for (int row = 0; row < updateHeight; row++)
 		{
 			const uint16_t* source = reinterpret_cast<const uint16_t*>(
-				reinterpret_cast<const uint8_t*>(pixels) + static_cast<size_t>(y) * stride);
-			uint32_t* target = converted.data() + static_cast<size_t>(y) * width;
-			for (int x = 0; x < width; x++)
+				reinterpret_cast<const uint8_t*>(pixels) + static_cast<size_t>(dirtyY + row) * stride);
+			uint32_t* target = converted.data() + static_cast<size_t>(row) * updateWidth;
+			for (int column = 0; column < updateWidth; column++)
 			{
-				uint16_t value = source[x];
+				uint16_t value = source[dirtyX + column];
 				uint32_t bMask = blueBits > 0 ? ((1u << blueBits) - 1u) : 0u;
 				uint32_t gMask = greenBits > 0 ? ((1u << greenBits) - 1u) : 0u;
 				uint32_t rMask = redBits > 0 ? ((1u << redBits) - 1u) : 0u;
@@ -1454,36 +1598,73 @@ void QemuDirectHost::VideoCallback(const void* pixels, int width, int height, in
 				{
 					std::swap(r, b);
 				}
-				target[x] = PackBgra(r, g, b);
+				target[column] = PackBgra(r, g, b);
 			}
 		}
-	}
-	else if (bitsPerPixel == 8)
-	{
-		for (int y = 0; y < height; y++)
+		}
+		else if (bitsPerPixel == 8)
 		{
-			const uint8_t* source = reinterpret_cast<const uint8_t*>(pixels) + static_cast<size_t>(y) * stride;
-			uint32_t* target = converted.data() + static_cast<size_t>(y) * width;
-			for (int x = 0; x < width; x++)
+		for (int row = 0; row < updateHeight; row++)
+		{
+			const uint8_t* source = reinterpret_cast<const uint8_t*>(pixels) +
+				static_cast<size_t>(dirtyY + row) * stride;
+			uint32_t* target = converted.data() + static_cast<size_t>(row) * updateWidth;
+			for (int column = 0; column < updateWidth; column++)
 			{
-				uint32_t value = source[x];
-				target[x] = PackBgra(value, value, value);
+				uint32_t value = source[dirtyX + column];
+				target[column] = PackBgra(value, value, value);
 			}
 		}
-	}
-	else
-	{
-		return;
-	}
+		}
+		else
+		{
+			return;
+		}
 	}
 
 	{
 		std::lock_guard<std::mutex> lock(host->m_frameMutex);
+		if (host->m_videoFrameCount == 0)
+		{
+			host->m_firstVideoFrameTick = GetTickCount64();
+		}
+		bool resized = !host->m_frameValid ||
+			host->m_frameWidth != static_cast<unsigned>(width) ||
+			host->m_frameHeight != static_cast<unsigned>(height);
+		if (resized)
+		{
+			host->m_framePixels.assign(static_cast<size_t>(width) * height, 0xff000000u);
+			host->m_frameDirty = false;
+		}
+		for (int row = 0; row < updateHeight; row++)
+		{
+			const uint32_t* source = converted.data() + static_cast<size_t>(row) * updateWidth;
+			uint32_t* target = host->m_framePixels.data() +
+				static_cast<size_t>(dirtyY + row) * width + dirtyX;
+			std::copy_n(source, updateWidth, target);
+		}
 		host->m_frameWidth = static_cast<unsigned>(width);
 		host->m_frameHeight = static_cast<unsigned>(height);
-		host->m_framePixels.swap(converted);
 		host->m_videoFrameCount++;
 		host->m_frameValid = true;
+		if (!host->m_frameDirty)
+		{
+			host->m_dirtyX = static_cast<unsigned>(dirtyX);
+			host->m_dirtyY = static_cast<unsigned>(dirtyY);
+			host->m_dirtyWidth = static_cast<unsigned>(updateWidth);
+			host->m_dirtyHeight = static_cast<unsigned>(updateHeight);
+		}
+		else
+		{
+			unsigned right = (std::max)(host->m_dirtyX + host->m_dirtyWidth,
+				static_cast<unsigned>(dirtyX + updateWidth));
+			unsigned bottom = (std::max)(host->m_dirtyY + host->m_dirtyHeight,
+				static_cast<unsigned>(dirtyY + updateHeight));
+			host->m_dirtyX = (std::min)(host->m_dirtyX, static_cast<unsigned>(dirtyX));
+			host->m_dirtyY = (std::min)(host->m_dirtyY, static_cast<unsigned>(dirtyY));
+			host->m_dirtyWidth = right - host->m_dirtyX;
+			host->m_dirtyHeight = bottom - host->m_dirtyY;
+		}
 		host->m_frameDirty = true;
 		host->m_pointerWidth = width;
 		host->m_pointerHeight = height;
@@ -1500,6 +1681,13 @@ void QemuDirectHost::VideoCallback(const void* pixels, int width, int height, in
 			L", stride=" + std::to_wstring(stride) + L", format=0x" + formatStream.str() +
 			L", elapsed_ms=" + std::to_wstring(elapsed));
 	}
+}
+
+void QemuDirectHost::VideoCallback(const void* pixels, int width, int height,
+	int stride, int format, void* opaque)
+{
+	ProcessVideoUpdate(reinterpret_cast<QemuDirectHost*>(opaque), pixels,
+		width, height, stride, format, 0, 0, width, height);
 }
 
 void QemuDirectHost::AudioCallback(const void*, size_t size, int sampleRate, int channels, int, void* opaque)
@@ -1522,6 +1710,14 @@ void QemuDirectHost::LogCallbackV2(void* opaque, QemuHostLogLevel level, const c
 void QemuDirectHost::VideoCallbackV2(void* opaque, const void* pixels, int width, int height, int stride, int format)
 {
 	VideoCallback(pixels, width, height, stride, format, opaque);
+}
+
+void QemuDirectHost::VideoUpdateCallbackV3(void* opaque, const void* pixels,
+	int width, int height, int stride, int format,
+	int x, int y, int updateWidth, int updateHeight)
+{
+	ProcessVideoUpdate(reinterpret_cast<QemuDirectHost*>(opaque), pixels,
+		width, height, stride, format, x, y, updateWidth, updateHeight);
 }
 
 void QemuDirectHost::AudioCallbackV2(void* opaque, const void* samples, size_t size, int sample_rate, int channels, int format)

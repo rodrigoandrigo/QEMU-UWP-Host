@@ -145,8 +145,16 @@ void QemuFrameRenderer::UploadFrameTexture(const QemuHostFrameSnapshot& frame)
 		return;
 	}
 
+	D3D11_BOX dirtyBox = {};
+	dirtyBox.left = frame.dirtyX;
+	dirtyBox.top = frame.dirtyY;
+	dirtyBox.front = 0;
+	dirtyBox.right = frame.dirtyX + frame.dirtyWidth;
+	dirtyBox.bottom = frame.dirtyY + frame.dirtyHeight;
+	dirtyBox.back = 1;
 	m_deviceResources->GetD3DDeviceContext()->UpdateSubresource1(
-		m_frameTexture.Get(), 0, nullptr, frame.pixels.data(), frame.width * 4, 0, 0);
+		m_frameTexture.Get(), 0, &dirtyBox, frame.pixels.data(),
+		frame.dirtyWidth * sizeof(uint32_t), 0, 0);
 }
 
 QemuFrameConstants QemuFrameRenderer::BuildConstants(const QemuHostFrameSnapshot& frame) const
