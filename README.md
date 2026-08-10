@@ -73,22 +73,36 @@ Use `Ctrl + Alt + M` to release or recapture emulator input.
 
 The Errors tab collects runtime messages, generated command information, QEMU host API inspection results, and packaged DLL load diagnostics. These tools help verify that the packaged QEMU DLLs and dependencies are available to the app at runtime.
 
-## UWP JIT and `codeGeneration`
+## Building `qemu-system-x86_64.dll` with MSYS2
 
-The Xbox/UWP QEMU build uses `codeGeneration` with split W^X memory. The TCG translation cache is backed by one paging-file mapping exposed through two coherent views: RW for emitting translated code and RX for executing it. No mapped page is writable and executable at the same time. Publishing a translation also calls `FlushInstructionCache`, including on x86-64, as required by the packaged-app API contract.
+This procedure builds the UWP-enabled `qemu-system-x86_64.dll` that must be placed in `Dependencies\Qemu` before packaging the application. Use the same MSYS2 environment and installed packages documented in [MSYS2-packages.md](https://github.com/rodrigoandrigo/Qemu-UWP-host-Builds/blob/main/MSYS2-packages.md).
 
-The Windows SDK UWP source path uses `CreateFileMappingFromApp`, `MapViewOfFileFromApp`, `VirtualProtectFromApp`, and `VirtualAllocFromApp`; Meson detects and links `OneCore.lib`. The legacy Durango XDK lacks the latter two `FromApp` declarations, so that toolchain automatically retains its permitted TV_APP `VirtualAlloc` and `VirtualProtect` calls while still using split RW/RX mappings. Both paths reject an attempted RWX protection. The package manifest must retain the `codeGeneration` capability.
+1. Download and extract the [QEMU 11.0.2 release](https://github.com/qemu/qemu/releases/tag/v11.0.2). The examples below assume that the extracted source directory is named `qemu-11.0.2`.
+2. Download [Qemu-Dll-shadps4](https://github.com/rodrigoandrigo/Qemu-Dll-shadps4).
+3. Copy the contents of `Qemu-Dll-shadps4` into the `qemu-11.0.2` source directory and allow the modified files to replace the original QEMU files.
+4. Open the configured MSYS2 shell and run:
 
-After compiling your QEMU DLL, validate its source contract and imports from a Developer PowerShell:
+   ```bash
+   cd /c/path/to/qemu-11.0.2/
 
-```powershell
-& <qemu-source>\scripts\ci\check-uwp-jit.ps1 `
-    -BinaryPath <path-to-qemu-system-x86_64.dll>
-```
+   mkdir build
 
-Omit `-BinaryPath` to perform only the static source verification. The script does not compile QEMU.
+   cd build
 
-For a DLL compiled against the July 2018 Durango XDK headers, add `-DurangoXdk` so the import audit accepts the XDK's TV_APP memory APIs.
+   ../configure --target-list=x86_64-softmmu --disable-gtk --disable-werror --disable-docs --disable-libnfs --disable-qga-vss --disable-sdl --disable-sdl-image --disable-dsound --enable-uwp --enable-xaudio2 --audio-drv-list=xaudio2
+
+   make -j2
+
+   strip --strip-unneeded qemu-system-x86_64.dll
+   ```
+
+5. Copy the stripped DLL from the QEMU build directory into this project's dependency directory:
+
+   ```bash
+   cp qemu-system-x86_64.dll /c/path/to/Qemu-UWP-host/Dependencies/Qemu/
+   ```
+
+Replace the example paths with the locations used on your machine. Rebuild the UWP application package after replacing the DLL so that MSBuild includes the updated binary.
 
 ## Project Structure
 
