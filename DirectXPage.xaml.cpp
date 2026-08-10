@@ -1351,6 +1351,7 @@ namespace
 DirectXPage::DirectXPage():
 	m_windowVisible(true),
 	m_coreInput(nullptr),
+	m_systemNavigationManager(nullptr),
 	m_selectedBootFile(nullptr),
 	m_stagedBootFile(nullptr),
 	m_selectedDriveFile(nullptr),
@@ -1409,6 +1410,7 @@ DirectXPage::DirectXPage():
 	m_metricsLastCpuTime100ns(0),
 	m_metricsLastFrameCount(0),
 	m_metricsBootComplete(false),
+	m_metricsEnabled(true),
 	m_inputCaptured(true),
 	m_visiblePointerCursor(ref new CoreCursor(CoreCursorType::Arrow, 0)),
 	m_corePointerCaptureActive(false),
@@ -1426,6 +1428,12 @@ DirectXPage::DirectXPage():
 	TraceStartup(L"DirectXPage: before InitializeComponent.");
 	InitializeComponent();
 	TraceStartup(L"DirectXPage: after InitializeComponent.");
+	m_systemNavigationManager = SystemNavigationManager::GetForCurrentView();
+	if (m_systemNavigationManager != nullptr)
+	{
+		m_backRequestedToken = m_systemNavigationManager->BackRequested +=
+			ref new EventHandler<BackRequestedEventArgs^>(this, &DirectXPage::OnBackRequested);
+	}
 	UpdateCaptureIndicators();
 	m_inputSurfaceWidth = (std::max)(1.0, swapChainPanel->ActualWidth);
 	m_inputSurfaceHeight = (std::max)(1.0, swapChainPanel->ActualHeight);
@@ -1541,6 +1549,11 @@ DirectXPage::DirectXPage():
 
 DirectXPage::~DirectXPage()
 {
+	if (m_systemNavigationManager != nullptr)
+	{
+		m_systemNavigationManager->BackRequested -= m_backRequestedToken;
+		m_systemNavigationManager = nullptr;
+	}
 	StopAllMediaNbdServers();
 	if (m_gamepadPollTimer != nullptr)
 	{
@@ -3136,6 +3149,24 @@ void DirectXPage::ShutdownButton_Click(Object^ sender, RoutedEventArgs^ e)
 	SetStatus(L"QEMU shutdown requested.");
 }
 
+void DirectXPage::MetricsButton_Click(Object^ sender, RoutedEventArgs^ e)
+{
+	(void)sender;
+	(void)e;
+
+	m_metricsEnabled = !m_metricsEnabled;
+	if (m_metricsEnabled)
+	{
+		m_metricsLastSampleTick = GetTickCount64();
+		m_metricsLastFrameCount = m_main != nullptr ? m_main->VideoFrameCount() : 0;
+		m_metricsLastCpuTime100ns = 0;
+	}
+	UpdateMetricsControl();
+	SetStatus(m_metricsEnabled
+		? L"Performance metrics enabled."
+		: L"Performance metrics disabled.");
+}
+
 void DirectXPage::WriteCommandLineAndStart(String^ commandLine)
 {
 	if (commandLine == nullptr || commandLine->Length() == 0)
@@ -3537,6 +3568,11 @@ void DirectXPage::MemoryBox_SelectionChanged(Object^ sender, SelectionChangedEve
 void DirectXPage::OnKeyDown(CoreWindow^ sender, KeyEventArgs^ args)
 {
 	VirtualKey keyCode = args->VirtualKey;
+	if (keyCode == VirtualKey::GamepadB)
+	{
+		args->Handled = true;
+		return;
+	}
 	m_ctrlDown = IsControlDown();
 	m_altDown = IsAltDown();
 	if (keyCode == VirtualKey::Control || keyCode == VirtualKey::LeftControl || keyCode == VirtualKey::RightControl)
@@ -3576,6 +3612,11 @@ void DirectXPage::OnKeyDown(CoreWindow^ sender, KeyEventArgs^ args)
 void DirectXPage::OnKeyUp(CoreWindow^ sender, KeyEventArgs^ args)
 {
 	VirtualKey keyCode = args->VirtualKey;
+	if (keyCode == VirtualKey::GamepadB)
+	{
+		args->Handled = true;
+		return;
+	}
 	if (keyCode == VirtualKey::Control || keyCode == VirtualKey::LeftControl || keyCode == VirtualKey::RightControl)
 	{
 		m_ctrlDown = IsControlDown();
@@ -3593,6 +3634,16 @@ void DirectXPage::OnKeyUp(CoreWindow^ sender, KeyEventArgs^ args)
 	if (key != 0)
 	{
 		m_main->SetKey(key, false);
+		args->Handled = true;
+	}
+}
+
+void DirectXPage::OnBackRequested(Object^ sender, BackRequestedEventArgs^ args)
+{
+	(void)sender;
+	if (args != nullptr)
+	{
+		/* Xbox maps gamepad B to Back. This host never exits through Back. */
 		args->Handled = true;
 	}
 }
@@ -3660,7 +3711,10 @@ void DirectXPage::MetricsTimer_Tick(Object^ sender, Object^ e)
 {
 	(void)sender;
 	(void)e;
-	UpdatePerformanceMetrics();
+	if (m_metricsEnabled && (m_isStarting || m_isRunning))
+	{
+		UpdatePerformanceMetrics();
+	}
 }
 
 void DirectXPage::ResetPerformanceMetrics()
@@ -3674,8 +3728,33 @@ void DirectXPage::ResetPerformanceMetrics()
 	if (ramMetricText != nullptr) ramMetricText->Text = "-- MB";
 	if (fpsMetricText != nullptr) fpsMetricText->Text = "0.0";
 	if (cpuMetricText != nullptr) cpuMetricText->Text = "0.0%";
-	if (metricsOverlay != nullptr) metricsOverlay->Visibility = Windows::UI::Xaml::Visibility::Visible;
-	if (m_metricsTimer != nullptr) m_metricsTimer->Start();
+	UpdateMetricsControl();
+}
+
+void DirectXPage::UpdateMetricsControl()
+{
+	const bool active = m_metricsEnabled && (m_isStarting || m_isRunning);
+	if (metricsButton != nullptr)
+	{
+		metricsButton->Label = m_metricsEnabled ? "Metrics on" : "Metrics off";
+	}
+	if (m_metricsTimer != nullptr)
+	{
+		if (active)
+		{
+			m_metricsTimer->Start();
+		}
+		else
+		{
+			m_metricsTimer->Stop();
+		}
+	}
+	if (metricsOverlay != nullptr)
+	{
+		metricsOverlay->Visibility = active
+			? Windows::UI::Xaml::Visibility::Visible
+			: Windows::UI::Xaml::Visibility::Collapsed;
+	}
 }
 
 void DirectXPage::UpdatePerformanceMetrics()
@@ -3751,6 +3830,7 @@ void DirectXPage::UpdatePerformanceMetrics()
 void DirectXPage::SetStartState(bool starting, bool running)
 {
 	bool startingNewRun = starting && !m_isStarting && !m_isRunning;
+	bool enteringRunning = running && !m_isRunning;
 	if (startingNewRun)
 	{
 		ResetPerformanceMetrics();
@@ -3777,14 +3857,8 @@ void DirectXPage::SetStartState(bool starting, bool running)
 	if (!starting && !running)
 	{
 		StopRfbProxyServer();
-		if (m_metricsTimer != nullptr) m_metricsTimer->Stop();
-		if (metricsOverlay != nullptr) metricsOverlay->Visibility = Windows::UI::Xaml::Visibility::Collapsed;
 	}
-	else
-	{
-		if (m_metricsTimer != nullptr) m_metricsTimer->Start();
-		if (metricsOverlay != nullptr) metricsOverlay->Visibility = Windows::UI::Xaml::Visibility::Visible;
-	}
+	UpdateMetricsControl();
 	if (startButton != nullptr)
 	{
 		startButton->IsEnabled = !starting && !running;
@@ -3806,6 +3880,17 @@ void DirectXPage::SetStartState(bool starting, bool running)
 	UpdateRfbRuntimeOverlay();
 	UpdateVirtualKeyboardVisibility();
 	ApplyInputCaptureState();
+	if (enteringRunning && Dispatcher != nullptr)
+	{
+		Dispatcher->RunAsync(CoreDispatcherPriority::High, ref new DispatchedHandler([this]()
+		{
+			if (m_isRunning)
+			{
+				FocusEmulatorSurface();
+				ApplyInputCaptureState();
+			}
+		}));
+	}
 }
 
 void DirectXPage::UpdateVmControlButtons()
@@ -3822,11 +3907,11 @@ void DirectXPage::UpdateVmControlButtons()
 	}
 	if (stopButton != nullptr)
 	{
-		stopButton->IsEnabled = m_isRunning && !m_isStopPending;
+		stopButton->IsEnabled = false;
 	}
 	if (shutdownButton != nullptr)
 	{
-		shutdownButton->IsEnabled = canControl && !m_isShutdownPending;
+		shutdownButton->IsEnabled = false;
 	}
 }
 
@@ -3883,6 +3968,10 @@ void DirectXPage::UpdateCaptureIndicators()
 	if (startButton != nullptr)
 	{
 		startButton->IsTabStop = controlsCanTakeKeyboard;
+	}
+	if (metricsButton != nullptr)
+	{
+		metricsButton->IsTabStop = controlsCanTakeKeyboard;
 	}
 	if (pauseButton != nullptr)
 	{
@@ -3978,6 +4067,11 @@ void DirectXPage::FocusEmulatorSurface()
 {
 	try
 	{
+		Window::Current->Activate();
+		if (bottomAppBar != nullptr)
+		{
+			bottomAppBar->IsOpen = false;
+		}
 		this->Focus(Windows::UI::Xaml::FocusState::Programmatic);
 	}
 	catch (...)
@@ -4204,10 +4298,13 @@ void DirectXPage::BuildVirtualKeyboard()
 	{
 		Button^ button = ref new Button();
 		button->Content = ref new String(label);
-		button->MinWidth = 34;
-		button->Height = 34;
-		button->Padding = Thickness(4, 0, 4, 0);
-		button->FontSize = 15;
+		// Override the page-wide button minimums so the 18-column keyboard stays
+		// compact on a TV without covering most of the guest framebuffer.
+		button->MinWidth = 24;
+		button->MinHeight = 28;
+		button->Height = 28;
+		button->Padding = Thickness(2, 0, 2, 0);
+		button->FontSize = 12;
 		button->HorizontalAlignment = Windows::UI::Xaml::HorizontalAlignment::Stretch;
 		button->VerticalAlignment = Windows::UI::Xaml::VerticalAlignment::Stretch;
 		button->Foreground = ref new SolidColorBrush(Colors::White);

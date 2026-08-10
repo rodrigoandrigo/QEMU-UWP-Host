@@ -68,6 +68,7 @@ namespace Qemu_UWP_host
 		void ResumeButton_Click(Platform::Object^ sender, Windows::UI::Xaml::RoutedEventArgs^ e);
 		void StopButton_Click(Platform::Object^ sender, Windows::UI::Xaml::RoutedEventArgs^ e);
 		void ShutdownButton_Click(Platform::Object^ sender, Windows::UI::Xaml::RoutedEventArgs^ e);
+		void MetricsButton_Click(Platform::Object^ sender, Windows::UI::Xaml::RoutedEventArgs^ e);
 		void ResetButton_Click(Platform::Object^ sender, Windows::UI::Xaml::RoutedEventArgs^ e);
 		void ShowTabsButton_Click(Platform::Object^ sender, Windows::UI::Xaml::RoutedEventArgs^ e);
 		void DetectTargetsButton_Click(Platform::Object^ sender, Windows::UI::Xaml::RoutedEventArgs^ e);
@@ -90,6 +91,7 @@ namespace Qemu_UWP_host
 		void MemoryBox_SelectionChanged(Platform::Object^ sender, Windows::UI::Xaml::Controls::SelectionChangedEventArgs^ e);
 		void OnKeyDown(Windows::UI::Core::CoreWindow^ sender, Windows::UI::Core::KeyEventArgs^ args);
 		void OnKeyUp(Windows::UI::Core::CoreWindow^ sender, Windows::UI::Core::KeyEventArgs^ args);
+		void OnBackRequested(Platform::Object^ sender, Windows::UI::Core::BackRequestedEventArgs^ args);
 		void OnCompositionScaleChanged(Windows::UI::Xaml::Controls::SwapChainPanel^ sender, Object^ args);
 		void OnSwapChainPanelSizeChanged(Platform::Object^ sender, Windows::UI::Xaml::SizeChangedEventArgs^ e);
 		void SetStatus(const std::wstring& text);
@@ -155,6 +157,7 @@ namespace Qemu_UWP_host
 		void MetricsTimer_Tick(Platform::Object^ sender, Platform::Object^ e);
 		void ResetPerformanceMetrics();
 		void UpdatePerformanceMetrics();
+		void UpdateMetricsControl();
 		void PollGamepad();
 		void BuildVirtualKeyboard();
 		void UpdateVirtualKeyboardVisibility();
@@ -178,6 +181,8 @@ namespace Qemu_UWP_host
 		// Track independent input on a background worker thread.
 		Windows::Foundation::IAsyncAction^ m_inputLoopWorker;
 		Windows::UI::Core::CoreIndependentInputSource^ m_coreInput;
+		Windows::UI::Core::SystemNavigationManager^ m_systemNavigationManager;
+		Windows::Foundation::EventRegistrationToken m_backRequestedToken;
 
 		// Independent input handling functions.
 		void OnPointerPressed(Platform::Object^ sender, Windows::UI::Core::PointerEventArgs^ e);
@@ -250,6 +255,7 @@ namespace Qemu_UWP_host
 		uint64_t m_metricsLastCpuTime100ns;
 		unsigned int m_metricsLastFrameCount;
 		bool m_metricsBootComplete;
+		bool m_metricsEnabled;
 		bool m_windowVisible;
 		bool m_inputCaptured;
 		Windows::UI::Core::CoreCursor^ m_visiblePointerCursor;

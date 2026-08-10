@@ -6,6 +6,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
+    IsTabStop="True"
     Background="#FF061A14">
 
   <Page.Resources>
@@ -59,33 +60,60 @@
         BorderBrush="{StaticResource AccentBrush}"
         BorderThickness="0,0,0,2"
         Foreground="White"
+        IsDynamicOverflowEnabled="False"
         HorizontalContentAlignment="Right">
       <CommandBar.Content>
-        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-          <FontIcon Glyph="&#xE768;" Foreground="{StaticResource AccentBrush}" FontSize="22" />
-          <StackPanel>
-            <TextBlock Text="Xbox Virtual Machine" Foreground="White" FontWeight="SemiBold" FontSize="16" />
+        <Grid Width="420" Margin="8,0,12,0" VerticalAlignment="Center">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <FontIcon
+              Grid.Column="0"
+              Glyph="&#xE7F4;"
+              Margin="0,0,8,0"
+              Foreground="{StaticResource AccentBrush}"
+              FontSize="18" />
+          <StackPanel Grid.Column="1" VerticalAlignment="Center">
+            <TextBlock
+                Text="Xbox Virtual Machine"
+                Foreground="White"
+                FontWeight="SemiBold"
+                FontSize="15"
+                TextTrimming="CharacterEllipsis" />
             <TextBlock
                 x:Name="statusText"
                 Text="Choose a disk or CD image, select a profile if needed, then press Start."
                 Foreground="{StaticResource MutedTextBrush}"
-                FontSize="12"
+                FontSize="11"
                 TextTrimming="CharacterEllipsis"
-                MaxWidth="720" />
+                MaxWidth="320" />
           </StackPanel>
-          <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" IsHitTestVisible="False">
-            <FontIcon x:Name="keyboardCaptureIcon" Glyph="&#xE765;" Foreground="{StaticResource AccentBrush}" FontSize="18" />
-            <FontIcon x:Name="mouseCaptureIcon" Glyph="&#xE962;" Foreground="{StaticResource AccentBrush}" FontSize="18" />
+          <StackPanel
+              Grid.Column="2"
+              Orientation="Horizontal"
+              Spacing="6"
+              Margin="8,0,0,0"
+              VerticalAlignment="Center"
+              IsHitTestVisible="False">
+            <FontIcon x:Name="keyboardCaptureIcon" Glyph="&#xE765;" Foreground="{StaticResource AccentBrush}" FontSize="16" />
+            <FontIcon x:Name="mouseCaptureIcon" Glyph="&#xE962;" Foreground="{StaticResource AccentBrush}" FontSize="16" />
           </StackPanel>
-        </StackPanel>
+        </Grid>
       </CommandBar.Content>
       <CommandBar.PrimaryCommands>
         <AppBarButton x:Name="showTabsButton" Icon="Setting" Label="Hide settings" Click="ShowTabsButton_Click" Foreground="White" ToolTipService.ToolTip="Show or hide setup options" />
         <AppBarButton x:Name="startButton" Icon="Play" Label="Start" Click="StartButton_Click" Foreground="White" Background="{StaticResource AccentBrush}" ToolTipService.ToolTip="Start the virtual machine" />
+        <AppBarButton x:Name="metricsButton" Label="Metrics on" Click="MetricsButton_Click" Foreground="White" ToolTipService.ToolTip="Show or hide performance metrics">
+          <AppBarButton.Icon>
+            <FontIcon Glyph="&#xE9D9;" />
+          </AppBarButton.Icon>
+        </AppBarButton>
         <AppBarButton x:Name="pauseButton" Icon="Pause" Label="Pause" Click="PauseButton_Click" Foreground="White" IsEnabled="False" IsTabStop="False" ToolTipService.ToolTip="Pause virtual CPUs while keeping the virtual machine open" />
         <AppBarButton x:Name="resumeButton" Icon="Play" Label="Resume" Click="ResumeButton_Click" Foreground="White" IsEnabled="False" IsTabStop="False" ToolTipService.ToolTip="Resume a paused virtual machine" />
-        <AppBarButton x:Name="stopButton" Icon="Stop" Label="Stop" Click="StopButton_Click" Foreground="White" IsEnabled="False" IsTabStop="False" ToolTipService.ToolTip="Force the emulator session to stop" />
-        <AppBarButton x:Name="shutdownButton" Label="Shutdown" Click="ShutdownButton_Click" Foreground="White" IsEnabled="False" IsTabStop="False" ToolTipService.ToolTip="Request a graceful guest shutdown">
+        <AppBarButton x:Name="stopButton" Icon="Stop" Label="Stop" Click="StopButton_Click" Foreground="White" IsEnabled="False" IsTabStop="False" Visibility="Collapsed" ToolTipService.ToolTip="Disabled in this build" />
+        <AppBarButton x:Name="shutdownButton" Label="Shutdown" Click="ShutdownButton_Click" Foreground="White" IsEnabled="False" IsTabStop="False" Visibility="Collapsed" ToolTipService.ToolTip="Disabled in this build">
           <AppBarButton.Icon>
             <FontIcon Glyph="&#xE7E8;" />
           </AppBarButton.Icon>
@@ -683,18 +711,19 @@
           Background="#99000000"
           BorderBrush="#66FFFFFF"
           BorderThickness="1"
-          CornerRadius="6"
+          CornerRadius="8"
           Padding="8"
-          Margin="18"
-          HorizontalAlignment="Stretch"
+          Margin="24"
+          MaxWidth="1040"
+          HorizontalAlignment="Center"
           VerticalAlignment="Bottom"
           IsHitTestVisible="False"
           Visibility="Collapsed">
-        <StackPanel Spacing="6">
+        <StackPanel Spacing="4">
           <TextBlock
               Text="Virtual keyboard"
               Foreground="White"
-              FontSize="13"
+              FontSize="12"
               FontWeight="SemiBold"
               Opacity="0.85" />
           <Grid x:Name="virtualKeyboardGrid" ColumnSpacing="2" RowSpacing="2" />
